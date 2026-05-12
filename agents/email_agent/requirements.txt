@@ -1,0 +1,5 @@
+imap-tools==1.13.0
+openai==1.57.0
+supabase==2.10.0
+openpyxl==3.1.5
+python-dotenv==1.0.1
