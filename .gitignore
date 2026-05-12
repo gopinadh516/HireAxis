@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+.angular/
+.next/
+.nuxt/
+.cache/
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude / local scratch
+.claude/worktrees/
+.claude/settings.local.json
+files/
+files.zip
+
+# Python (if any tooling added later)
+__pycache__/
+*.pyc
+.venv/
+venv/
