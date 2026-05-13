@@ -176,3 +176,133 @@ INSERT INTO users (name, email, role) VALUES
   ('Arjun Sharma',  'arjun@hireaxis.in',  'manager'),
   ('Priya Nair',    'priya@hireaxis.in',  'recruiter'),
   ('Ravi Kumar',    'ravi@hireaxis.in',   'recruiter');
+
+-- ═══════════════════════════════════════════════════════
+-- v2 Talents Migration
+-- Run each block separately in Supabase SQL Editor
+-- ═══════════════════════════════════════════════════════
+
+-- Step 1: Rename existing tables
+-- ALTER TABLE job_candidates RENAME TO job_talents;
+-- ALTER TABLE job_talents RENAME COLUMN candidate_id TO talent_id;
+-- ALTER TABLE candidates RENAME TO talents;
+
+-- Step 2: Enums and column extensions
+-- CREATE TYPE gender_type     AS ENUM ('MALE','FEMALE','OTHER','PREFER_NOT_TO_SAY');
+-- CREATE TYPE visa_status     AS ENUM ('USC','GC','GC_EAD','H1B','H4_EAD','L1','L2_EAD','F1_OPT','F1_CPT','STEM_OPT','TN','E3','O1','J1','EAD','OTHER');
+-- CREATE TYPE talent_status   AS ENUM ('ACTIVE','INACTIVE','PLACED','BLACKLISTED');
+-- CREATE TYPE talent_source   AS ENUM ('INTERNAL','SELF_REGISTERED','REFERRAL','AGENCY','JOB_BOARD');
+-- CREATE TYPE skill_level     AS ENUM ('BEGINNER','INTERMEDIATE','ADVANCED','EXPERT');
+-- CREATE TYPE document_type   AS ENUM ('RESUME','COVER_LETTER','CERTIFICATE','OTHER');
+-- CREATE TYPE approval_status AS ENUM ('PENDING','APPROVED','REJECTED');
+-- CREATE TYPE channel_type    AS ENUM ('PORTAL','WEBSITE','AGENT');
+--
+-- ALTER TABLE talents
+--   ADD COLUMN IF NOT EXISTS first_name      TEXT,
+--   ADD COLUMN IF NOT EXISTS last_name       TEXT,
+--   ADD COLUMN IF NOT EXISTS alt_phone       TEXT,
+--   ADD COLUMN IF NOT EXISTS dob             DATE,
+--   ADD COLUMN IF NOT EXISTS gender          gender_type,
+--   ADD COLUMN IF NOT EXISTS address         TEXT,
+--   ADD COLUMN IF NOT EXISTS city            TEXT,
+--   ADD COLUMN IF NOT EXISTS state           TEXT,
+--   ADD COLUMN IF NOT EXISTS country         TEXT DEFAULT 'USA',
+--   ADD COLUMN IF NOT EXISTS zip_code        TEXT,
+--   ADD COLUMN IF NOT EXISTS total_experience FLOAT,
+--   ADD COLUMN IF NOT EXISTS portfolio_url   TEXT,
+--   ADD COLUMN IF NOT EXISTS summary         TEXT,
+--   ADD COLUMN IF NOT EXISTS visa_status     visa_status,
+--   ADD COLUMN IF NOT EXISTS talent_status   talent_status NOT NULL DEFAULT 'ACTIVE',
+--   ADD COLUMN IF NOT EXISTS talent_source   talent_source NOT NULL DEFAULT 'INTERNAL',
+--   ADD COLUMN IF NOT EXISTS is_marketable   BOOLEAN NOT NULL DEFAULT true,
+--   ADD COLUMN IF NOT EXISTS channel         channel_type NOT NULL DEFAULT 'PORTAL',
+--   ADD COLUMN IF NOT EXISTS approval_status approval_status NOT NULL DEFAULT 'APPROVED',
+--   ADD COLUMN IF NOT EXISTS approval_note   TEXT,
+--   ADD COLUMN IF NOT EXISTS created_by_id   UUID REFERENCES users(id),
+--   ADD COLUMN IF NOT EXISTS approved_by_id  UUID REFERENCES users(id),
+--   ADD COLUMN IF NOT EXISTS approved_at     TIMESTAMPTZ,
+--   ADD COLUMN IF NOT EXISTS updated_at      TIMESTAMPTZ DEFAULT NOW(),
+--   ADD COLUMN IF NOT EXISTS employee_id     UUID;
+
+-- Step 3: New tables, indexes, trigger, realtime
+-- CREATE TABLE talent_skills (
+--   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   talent_id    UUID NOT NULL REFERENCES talents(id) ON DELETE CASCADE,
+--   skill        TEXT NOT NULL,
+--   level        skill_level,
+--   years_of_exp FLOAT,
+--   created_at   TIMESTAMPTZ DEFAULT NOW()
+-- );
+--
+-- CREATE TABLE talent_documents (
+--   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   talent_id   UUID NOT NULL REFERENCES talents(id) ON DELETE CASCADE,
+--   type        document_type NOT NULL DEFAULT 'RESUME',
+--   file_name   TEXT NOT NULL,
+--   file_url    TEXT NOT NULL,
+--   file_size   INT,
+--   mime_type   TEXT,
+--   uploaded_at TIMESTAMPTZ DEFAULT NOW()
+-- );
+--
+-- CREATE INDEX ON talents(approval_status);
+-- CREATE INDEX ON talents(is_marketable);
+-- CREATE INDEX ON talents(visa_status);
+-- CREATE INDEX ON talents(talent_status);
+-- CREATE INDEX ON talents(created_at DESC);
+-- CREATE INDEX ON talent_skills(talent_id);
+-- CREATE INDEX ON talent_skills(skill);
+-- CREATE INDEX ON talent_documents(talent_id);
+--
+-- CREATE TRIGGER trg_talents_updated_at
+--   BEFORE UPDATE ON talents
+--   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+--
+-- ALTER PUBLICATION supabase_realtime ADD TABLE talents;
+--
+-- Storage: create bucket named 'talent-docs' set to Public in Supabase dashboard.
+
+-- ─────────────────────────────────────────
+-- SOURCING TASKS (v2 — talent sourcing agent)
+-- Run after talents module migration is applied
+-- ─────────────────────────────────────────
+
+-- CREATE TYPE sourcing_status AS ENUM ('queued','running','completed','failed');
+--
+-- CREATE TABLE sourcing_tasks (
+--   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   job_id        UUID REFERENCES jobs(id) ON DELETE CASCADE,
+--   triggered_by  UUID REFERENCES users(id),
+--   status        sourcing_status NOT NULL DEFAULT 'queued',
+--   results_count INT DEFAULT 0,
+--   error         TEXT,
+--   started_at    TIMESTAMPTZ,
+--   completed_at  TIMESTAMPTZ,
+--   created_at    TIMESTAMPTZ DEFAULT NOW()
+-- );
+--
+-- CREATE INDEX ON sourcing_tasks(status);
+-- CREATE INDEX ON sourcing_tasks(job_id);
+
+-- ─────────────────────────────────────────
+-- TALENT JOB MATCHES (job search agent output)
+-- Run after talents module migration is applied
+-- ─────────────────────────────────────────
+
+-- CREATE TABLE talent_job_matches (
+--   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   talent_id      UUID NOT NULL REFERENCES talents(id) ON DELETE CASCADE,
+--   job_title      TEXT NOT NULL,
+--   company        TEXT,
+--   location       TEXT,
+--   job_url        TEXT,
+--   match_score    INT DEFAULT 0,
+--   skills_matched TEXT[] DEFAULT '{}',
+--   source         TEXT DEFAULT 'agent',  -- 'agent' | 'manual'
+--   status         TEXT DEFAULT 'new',    -- 'new' | 'applied' | 'rejected' | 'shortlisted'
+--   found_at       TIMESTAMPTZ DEFAULT NOW()
+-- );
+--
+-- CREATE INDEX ON talent_job_matches(talent_id);
+-- CREATE INDEX ON talent_job_matches(status);
+-- CREATE INDEX ON talent_job_matches(match_score DESC);

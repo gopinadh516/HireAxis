@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { Job, User } from "@/lib/database.types";
 
-const MANAGER_ID = "b640078d-41a4-4f2c-8255-26d33a1c85bb"; // Arjun Sharma (manager) — replace with real auth later
+export const MANAGER_ID = "b640078d-41a4-4f2c-8255-26d33a1c85bb"; // Arjun Sharma (manager) — replace with real auth later
 
 export function useManagerDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -76,5 +76,5 @@ export function useManagerDashboard() {
   const active  = jobs.filter((j) => j.status === "active");
   const searching = jobs.filter((j) => j.status === "searching");
 
-  return { jobs, pending, active, searching, recruiters, loading, approveJob, rejectJob };
+  return { jobs, pending, active, searching, recruiters, loading, approveJob, rejectJob, fetchJobs };
 }

@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { CandidateWithScore } from "@/hooks/use-recruiter-dashboard";
-import type { CandidateStatus } from "@/lib/database.types";
+import type { TalentStatus } from "@/lib/database.types";
+type CandidateStatus = TalentStatus;
 
 function ScoreBadge({ score }: { score: number | null }) {
   if (score === null) return null;
@@ -31,14 +32,14 @@ interface CandidateCardProps {
 }
 
 export function CandidateCard({ item, onStatusChange }: CandidateCardProps) {
-  const c = item.candidates;
+  const c = item.talents;
   const [status, setStatus] = useState<CandidateStatus>(item.status);
   const [saving, setSaving] = useState(false);
 
   async function handleStatusChange(newStatus: string) {
     setSaving(true);
     const { error } = await supabase
-      .from("job_candidates")
+      .from("job_talents")
       .update({ status: newStatus as CandidateStatus })
       .eq("id", item.id);
     if (!error) {

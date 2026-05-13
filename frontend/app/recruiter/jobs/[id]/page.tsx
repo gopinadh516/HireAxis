@@ -11,10 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { useJobCandidates, useRecruiterDashboard } from "@/hooks/use-recruiter-dashboard";
+import { useSourcingStatus } from "@/hooks/use-sourcing-status";
 import { toast } from "sonner";
 import {
   ArrowLeftIcon, SearchIcon, MapPinIcon,
   BriefcaseIcon, UsersIcon, IndianRupeeIcon, MailIcon,
+  GlobeIcon, RefreshCwIcon,
 } from "lucide-react";
 
 export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,11 +26,21 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   const { assignments, startSearch } = useRecruiterDashboard();
   const { candidates, loading: candidatesLoading, refetch } = useJobCandidates(jobId);
+  const { task: sourcingTask, triggering, trigger: triggerSourcing } = useSourcingStatus(jobId);
 
   const assignment = assignments.find((a) => a.id === assignmentId || a.job_id === jobId);
   const job = assignment?.jobs;
 
   const [starting, setStarting] = useState(false);
+
+  async function handleTriggerSourcing() {
+    try {
+      await triggerSourcing();
+      toast.success("Sourcing agent queued — it will start shortly");
+    } catch {
+      toast.error("Failed to trigger sourcing. Is the backend running?");
+    }
+  }
 
   async function handleStartSearch() {
     if (!assignment) return;
@@ -149,6 +161,71 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   <p className="text-[11px] text-emerald-500 mt-0.5">{candidates.length} candidates found</p>
                 </div>
               )}
+
+              {/* Source Talents from Web */}
+              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <GlobeIcon className="size-3.5 text-muted-foreground" />
+                  <p className="text-xs font-medium">Source from Web</p>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Let the AI agent search LinkedIn, Naukri, and Dice for matching talent profiles.
+                </p>
+
+                {(!sourcingTask || sourcingTask.status === "failed") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-8 gap-1.5 text-xs"
+                    onClick={handleTriggerSourcing}
+                    disabled={triggering}
+                  >
+                    <GlobeIcon className="size-3.5" />
+                    {triggering ? "Queuing…" : "Source Talents from Web"}
+                  </Button>
+                )}
+
+                {sourcingTask?.status === "failed" && (
+                  <p className="text-[11px] text-destructive">
+                    Last run failed: {sourcingTask.error ?? "Unknown error"}
+                  </p>
+                )}
+
+                {sourcingTask?.status === "queued" && (
+                  <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                    <RefreshCwIcon className="size-3 text-amber-600 animate-spin" />
+                    <p className="text-[11px] text-amber-700 font-medium">Agent queued — will start shortly…</p>
+                  </div>
+                )}
+
+                {sourcingTask?.status === "running" && (
+                  <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                    <div className="flex gap-1">
+                      <span className="size-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0ms]" />
+                      <span className="size-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:150ms]" />
+                      <span className="size-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:300ms]" />
+                    </div>
+                    <p className="text-[11px] text-blue-700 font-medium">Sourcing in progress…</p>
+                  </div>
+                )}
+
+                {sourcingTask?.status === "completed" && (
+                  <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                    <p className="text-[11px] text-emerald-700 font-medium">
+                      {sourcingTask.results_count} talent{sourcingTask.results_count !== 1 ? "s" : ""} sourced
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 gap-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
+                      onClick={handleTriggerSourcing}
+                      disabled={triggering}
+                    >
+                      <RefreshCwIcon className="size-3" /> Re-run
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Right: Candidates */}

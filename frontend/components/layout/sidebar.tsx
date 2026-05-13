@@ -10,26 +10,31 @@ import {
   UsersIcon,
   BellIcon,
   LogOutIcon,
+  CheckCircleIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { usePendingCount } from "@/hooks/use-talents";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
+  dynamicBadge?: boolean;
 }
 
 const managerNav: NavItem[] = [
-  { label: "Dashboard", href: "/manager", icon: LayoutDashboardIcon },
-  { label: "Jobs", href: "/manager/jobs", icon: BriefcaseIcon },
+  { label: "Dashboard",     href: "/manager",               icon: LayoutDashboardIcon },
+  { label: "Jobs",          href: "/manager/jobs",          icon: BriefcaseIcon },
+  { label: "Talents",       href: "/manager/talents",       icon: UsersIcon },
+  { label: "Approvals",     href: "/manager/approvals",     icon: CheckCircleIcon, dynamicBadge: true },
   { label: "Notifications", href: "/manager/notifications", icon: BellIcon, badge: 3 },
 ];
 
 const recruiterNav: NavItem[] = [
-  { label: "Dashboard", href: "/recruiter", icon: LayoutDashboardIcon },
-  { label: "My Jobs", href: "/recruiter/jobs", icon: BriefcaseIcon },
-  { label: "Candidates", href: "/recruiter/candidates", icon: UsersIcon },
+  { label: "Dashboard", href: "/recruiter",         icon: LayoutDashboardIcon },
+  { label: "My Jobs",   href: "/recruiter/jobs",    icon: BriefcaseIcon },
+  { label: "Talents",   href: "/recruiter/talents", icon: UsersIcon },
 ];
 
 interface SidebarProps {
@@ -40,6 +45,7 @@ interface SidebarProps {
 export function Sidebar({ role, userName }: SidebarProps) {
   const pathname = usePathname();
   const nav = role === "manager" ? managerNav : recruiterNav;
+  const pendingCount = usePendingCount();
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-border bg-sidebar">
@@ -63,8 +69,9 @@ export function Sidebar({ role, userName }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 space-y-0.5 px-3 pt-4">
-        {nav.map(({ label, href, icon: Icon, badge }) => {
+        {nav.map(({ label, href, icon: Icon, badge, dynamicBadge }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
+          const displayBadge = dynamicBadge ? pendingCount : badge;
           return (
             <Link
               key={href}
@@ -78,9 +85,9 @@ export function Sidebar({ role, userName }: SidebarProps) {
             >
               <Icon className="size-4 shrink-0" />
               <span className="flex-1">{label}</span>
-              {badge && (
+              {displayBadge != null && displayBadge > 0 && (
                 <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-[11px]">
-                  {badge}
+                  {displayBadge}
                 </Badge>
               )}
             </Link>

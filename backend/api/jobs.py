@@ -19,6 +19,7 @@ class JobCreate(BaseModel):
     raw_email_text: Optional[str] = None
     source: str = "email"
     created_by: Optional[str] = None
+    recruiter_id: Optional[str] = None   # only used when source="manual"
 
 
 class JobApprove(BaseModel):
@@ -45,10 +46,42 @@ def get_job(job_id: str):
 
 @router.post("/", status_code=201)
 def create_job(body: JobCreate):
-    data = body.model_dump()
-    data["status"] = "pending_approval"
+    from datetime import datetime, timezone
+
+    recruiter_id = body.recruiter_id
+    data = body.model_dump(exclude_none=True)
+    data.pop("recruiter_id", None)  # not a jobs column
+
+    if body.source == "manual":
+        # Manager created directly — skip approval queue
+        data["status"] = "active"
+        data["approved_by"] = body.created_by
+        data["approved_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        data["status"] = "pending_approval"
+
     result = supabase.table("jobs").insert(data).execute()
-    return result.data[0]
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create job")
+    job = result.data[0]
+
+    if body.source == "manual" and recruiter_id:
+        supabase.table("job_assignments").insert({
+            "job_id": job["id"],
+            "recruiter_id": recruiter_id,
+            "assigned_by": body.created_by,
+            "status": "pending",
+        }).execute()
+        supabase.table("notifications").insert({
+            "user_id": recruiter_id,
+            "type": "job_assigned",
+            "title": "New job assigned to you",
+            "message": f"You have been assigned to: {job['title']}",
+            "data": {"job_id": job["id"]},
+            "is_read": False,
+        }).execute()
+
+    return job
 
 
 @router.patch("/{job_id}/approve")
@@ -107,4 +140,38 @@ def reject_job(job_id: str, rejected_by: str):
 
     if not result.data:
         raise HTTPException(status_code=404, detail="Job not found")
+    return result.data[0]
+
+
+class SourceTalentsBody(BaseModel):
+    triggered_by: Optional[str] = None
+
+
+@router.post("/{job_id}/source-talents", status_code=201)
+def source_talents(job_id: str, body: SourceTalentsBody = SourceTalentsBody()):
+    job = supabase.table("jobs").select("id").eq("id", job_id).limit(1).execute()
+    if not job.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    task = supabase.table("sourcing_tasks").insert({
+        "job_id":       job_id,
+        "triggered_by": body.triggered_by,
+        "status":       "queued",
+    }).execute()
+
+    return {"task_id": task.data[0]["id"], "status": "queued"}
+
+
+@router.get("/{job_id}/sourcing-status")
+def sourcing_status(job_id: str):
+    result = (
+        supabase.table("sourcing_tasks")
+        .select("*")
+        .eq("job_id", job_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return {"status": None}
     return result.data[0]
