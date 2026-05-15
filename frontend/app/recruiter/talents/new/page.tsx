@@ -72,7 +72,7 @@ export default function NewTalentPage() {
 
   return (
     <>
-      <Shell role="recruiter" userName="Priya Nair" pageTitle="Add Talent" pageSubtitle="Add a new talent to the pool">
+      <Shell role="recruiter" pageTitle="Add Talent" pageSubtitle="Add a new talent to the pool">
         <TalentForm mode="create" onSubmit={handleSubmit} submitting={submitting} />
       </Shell>
       <Toaster position="top-right" richColors />

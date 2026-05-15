@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MapPinIcon, UsersIcon, BriefcaseIcon, ClockIcon, MailIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,10 +19,10 @@ function timeAgo(date: string) {
 
 interface JobCardProps {
   job: Job;
-  onReview: (job: Job) => void;
+  onReview?: (job: Job) => void;
 }
 
-export function JobCard({ job, onReview }: JobCardProps) {
+export function JobCard({ job }: JobCardProps) {
   const isPending = job.status === "pending_approval";
 
   return (
@@ -72,13 +73,11 @@ export function JobCard({ job, onReview }: JobCardProps) {
 
         {/* Action */}
         {isPending && (
-          <Button
-            size="sm"
-            onClick={() => onReview(job)}
-            className="shrink-0 h-8 px-3 text-xs"
-          >
-            Review
-          </Button>
+          <Link href={`/manager/jobs/${job.id}`}>
+            <Button size="sm" className="shrink-0 h-8 px-3 text-xs">
+              Review
+            </Button>
+          </Link>
         )}
       </div>
     </Card>

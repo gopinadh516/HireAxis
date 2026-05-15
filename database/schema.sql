@@ -306,3 +306,51 @@ INSERT INTO users (name, email, role) VALUES
 -- CREATE INDEX ON talent_job_matches(talent_id);
 -- CREATE INDEX ON talent_job_matches(status);
 -- CREATE INDEX ON talent_job_matches(match_score DESC);
+
+-- ─────────────────────────────────────────
+-- JOBS v2 MIGRATION — rich job fields
+-- Run this in Supabase SQL Editor
+-- ─────────────────────────────────────────
+-- ALTER TABLE jobs
+--   ADD COLUMN IF NOT EXISTS job_type           TEXT DEFAULT 'FULL_TIME',
+--   ADD COLUMN IF NOT EXISTS work_mode          TEXT DEFAULT 'ONSITE',
+--   ADD COLUMN IF NOT EXISTS job_status         TEXT DEFAULT 'OPEN',
+--   ADD COLUMN IF NOT EXISTS is_active          BOOLEAN DEFAULT true,
+--   ADD COLUMN IF NOT EXISTS company            TEXT,
+--   ADD COLUMN IF NOT EXISTS channel            TEXT DEFAULT 'PORTAL',
+--   ADD COLUMN IF NOT EXISTS approval_status    TEXT DEFAULT 'APPROVED',
+--   ADD COLUMN IF NOT EXISTS approval_note      TEXT,
+--   ADD COLUMN IF NOT EXISTS salary_min         DECIMAL,
+--   ADD COLUMN IF NOT EXISTS salary_max         DECIMAL,
+--   ADD COLUMN IF NOT EXISTS currency           TEXT DEFAULT 'USD',
+--   ADD COLUMN IF NOT EXISTS pay_rate_min       DECIMAL,
+--   ADD COLUMN IF NOT EXISTS pay_rate_max       DECIMAL,
+--   ADD COLUMN IF NOT EXISTS bill_rate_min      DECIMAL,
+--   ADD COLUMN IF NOT EXISTS bill_rate_max      DECIMAL,
+--   ADD COLUMN IF NOT EXISTS required_skills    TEXT[] DEFAULT '{}',
+--   ADD COLUMN IF NOT EXISTS nice_to_have       TEXT[] DEFAULT '{}',
+--   ADD COLUMN IF NOT EXISTS visa_requirements  TEXT[] DEFAULT '{}',
+--   ADD COLUMN IF NOT EXISTS due_date           DATE,
+--   ADD COLUMN IF NOT EXISTS application_deadline DATE,
+--   ADD COLUMN IF NOT EXISTS openings           INTEGER DEFAULT 1,
+--   ADD COLUMN IF NOT EXISTS client_name        TEXT,
+--   ADD COLUMN IF NOT EXISTS client_contact     TEXT,
+--   ADD COLUMN IF NOT EXISTS client_email       TEXT,
+--   ADD COLUMN IF NOT EXISTS client_phone       TEXT,
+--   ADD COLUMN IF NOT EXISTS end_client_name    TEXT,
+--   ADD COLUMN IF NOT EXISTS end_client_contact TEXT,
+--   ADD COLUMN IF NOT EXISTS end_client_email   TEXT,
+--   ADD COLUMN IF NOT EXISTS end_client_phone   TEXT,
+--   ADD COLUMN IF NOT EXISTS vendor_name        TEXT,
+--   ADD COLUMN IF NOT EXISTS vendor_contact     TEXT,
+--   ADD COLUMN IF NOT EXISTS vendor_email       TEXT,
+--   ADD COLUMN IF NOT EXISTS vendor_phone       TEXT,
+--   ADD COLUMN IF NOT EXISTS posted_by_id       UUID REFERENCES users(id);
+
+-- ─────────────────────────────────────────
+-- MIGRATION: Case Management columns
+-- Run in Supabase SQL Editor if upgrading
+-- ─────────────────────────────────────────
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS case_id            TEXT UNIQUE;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS internal_bill_rate NUMERIC;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS bill_rate_margin   NUMERIC DEFAULT 15;

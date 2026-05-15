@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Shell } from "@/components/layout/shell";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,8 @@ import {
   LoaderIcon,
   UserCircleIcon,
 } from "lucide-react";
-import { VISA_STATUS_LABELS, TALENT_SOURCE_LABELS } from "@/lib/constants";
+import { VISA_STATUS_LABELS, TALENT_SOURCE_LABELS, CONTRACT_TYPES, WORK_MODE_LABELS, formatSalary } from "@/lib/constants";
+import { JobTypeBadge } from "@/components/jobs/JobTypeBadge";
 import type { Talent } from "@/lib/database.types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -50,8 +52,20 @@ interface Job {
   experience_min: number | null;
   experience_max: number | null;
   headcount: number;
+  openings?: number | null;
   source: string;
   created_at: string;
+  job_type?: string | null;
+  work_mode?: string | null;
+  company?: string | null;
+  end_client_name?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  pay_rate_min?: number | null;
+  pay_rate_max?: number | null;
+  currency?: string | null;
+  channel?: string | null;
+  approval_note?: string | null;
 }
 
 interface Recruiter {
@@ -381,7 +395,6 @@ function TalentApprovalCard({
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState("");
   const [rejecting, setRejecting] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const displayName = talent.first_name
     ? `${talent.first_name} ${talent.last_name ?? ""}`.trim()
@@ -481,9 +494,11 @@ function TalentApprovalCard({
                   </Button>
                 </a>
               )}
-              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setProfileOpen(true)}>
-                <EyeIcon className="size-3" /> View Profile
-              </Button>
+              <Link href={`/manager/talents/${talent.id}`}>
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                  <EyeIcon className="size-3" /> View Profile
+                </Button>
+              </Link>
               <div className="flex-1" />
               <Button
                 variant="outline"
@@ -530,14 +545,6 @@ function TalentApprovalCard({
         </DialogContent>
       </Dialog>
 
-      {profileOpen && (
-        <TalentProfileDialog
-          talentId={talent.id}
-          onClose={() => setProfileOpen(false)}
-          onApproved={() => { setProfileOpen(false); onApproved(); }}
-          onRejected={() => { setProfileOpen(false); onRejected(); }}
-        />
-      )}
     </>
   );
 }
@@ -546,37 +553,12 @@ function TalentApprovalCard({
 
 function JobApprovalCard({
   job,
-  recruiters,
-  onApproved,
   onRejected,
 }: {
   job: Job;
-  recruiters: Recruiter[];
-  onApproved: () => void;
   onRejected: () => void;
 }) {
-  const [approveOpen, setApproveOpen] = useState(false);
-  const [recruiterId, setRecruiterId] = useState("");
-  const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
-
-  async function handleApprove() {
-    if (!recruiterId) return;
-    setApproving(true);
-    try {
-      await apiFetch(`/api/approvals/jobs/${job.id}/approve`, {
-        method: "PATCH",
-        body: JSON.stringify({ recruiter_id: recruiterId }),
-      });
-      toast.success(`"${job.title}" approved and recruiter notified`);
-      setApproveOpen(false);
-      onApproved();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to approve");
-    } finally {
-      setApproving(false);
-    }
-  }
 
   async function handleReject() {
     setRejecting(true);
@@ -599,16 +581,28 @@ function JobApprovalCard({
             <BriefcaseIcon className="size-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-sm font-semibold">{job.title}</h4>
-              <span className="rounded border px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border-amber-200 capitalize">
-                via {job.source}
-              </span>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              {job.job_type && <JobTypeBadge type={job.job_type} />}
+              <SourceBadge channel={job.channel ?? null} />
+              {!job.channel && (
+                <span className="rounded border px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border-amber-200 capitalize">
+                  via {job.source}
+                </span>
+              )}
             </div>
+            <h4 className="text-sm font-semibold">{job.title}</h4>
+            {(job.company ?? job.end_client_name) && (
+              <p className="text-xs text-muted-foreground">{job.company ?? job.end_client_name}</p>
+            )}
             <div className="mt-0.5 flex flex-wrap gap-3 text-xs text-muted-foreground">
               {job.location && (
                 <span className="flex items-center gap-1">
                   <MapPinIcon className="size-3" /> {job.location}
+                </span>
+              )}
+              {job.work_mode && (
+                <span className="flex items-center gap-1">
+                  <BriefcaseIcon className="size-3" /> {WORK_MODE_LABELS[job.work_mode] ?? job.work_mode}
                 </span>
               )}
               {(job.experience_min != null || job.experience_max != null) && (
@@ -617,9 +611,19 @@ function JobApprovalCard({
                 </span>
               )}
               <span className="flex items-center gap-1">
-                <UsersIcon className="size-3" /> {job.headcount} position{job.headcount !== 1 ? "s" : ""}
+                <UsersIcon className="size-3" /> {job.openings ?? job.headcount} position{(job.openings ?? job.headcount) !== 1 ? "s" : ""}
               </span>
+              {(() => {
+                const isContract = (CONTRACT_TYPES as readonly string[]).includes(job.job_type ?? "");
+                const salaryText = isContract
+                  ? formatSalary(job.pay_rate_min, job.pay_rate_max, job.currency ?? undefined, "/hr")
+                  : formatSalary(job.salary_min, job.salary_max, job.currency ?? undefined, "/yr");
+                return salaryText ? <span className="flex items-center gap-1">$ {salaryText}</span> : null;
+              })()}
             </div>
+            {job.approval_note && (
+              <p className="mt-1 text-[11px] text-muted-foreground italic line-clamp-1">{job.approval_note}</p>
+            )}
             {job.skills.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {job.skills.slice(0, 6).map((s) => (
@@ -641,55 +645,15 @@ function JobApprovalCard({
               >
                 <XIcon className="size-3" /> {rejecting ? "Rejecting…" : "Reject"}
               </Button>
-              <Button
-                size="sm"
-                className="h-7 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700"
-                onClick={() => setApproveOpen(true)}
-              >
-                <CheckIcon className="size-3" /> Approve
-              </Button>
+              <Link href={`/manager/jobs/${job.id}`}>
+                <Button size="sm" className="h-7 gap-1.5 text-xs">
+                  <EyeIcon className="size-3" /> Review &amp; Initiate
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Approve dialog — select recruiter */}
-      <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Approve "{job.title}"</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Select a recruiter to assign this job to. They will be notified immediately.
-            </p>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Assign to Recruiter</Label>
-              <Select value={recruiterId} onValueChange={(v) => setRecruiterId(v ?? "")}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select recruiter…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {recruiters.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setApproveOpen(false)}>Cancel</Button>
-              <Button
-                size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={handleApprove}
-                disabled={approving || !recruiterId}
-              >
-                {approving ? "Approving…" : "Approve & Assign"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
@@ -740,7 +704,7 @@ export default function ApprovalsPage() {
 
   return (
     <>
-      <Shell role="manager" userName="Arjun Sharma" pageTitle="Approvals" pageSubtitle="Review pending requests">
+      <Shell role="manager" pageTitle="Approvals" pageSubtitle="Review pending requests">
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border mb-5">
           {tabs.map((tab) => (
@@ -809,8 +773,6 @@ export default function ApprovalsPage() {
                 <JobApprovalCard
                   key={j.id}
                   job={j}
-                  recruiters={recruiters}
-                  onApproved={loadJobs}
                   onRejected={loadJobs}
                 />
               ))

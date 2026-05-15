@@ -1,9 +1,12 @@
-export type UserRole = "manager" | "recruiter";
+export type UserRole = "super_admin" | "manager" | "recruiter";
 export type JobStatus = "draft" | "pending_approval" | "active" | "searching" | "closed";
+export type JobPostingStatus = "NEW" | "PENDING_VALIDATION" | "DRAFT" | "OPEN" | "CLOSED" | "ON_HOLD";
+export type JobType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "CONTRACT_TO_HIRE" | "TEMPORARY" | "INTERNSHIP" | "W2";
+export type WorkMode = "ONSITE" | "REMOTE" | "HYBRID";
 export type AssignmentStatus = "pending" | "reviewing" | "searching" | "completed";
 export type TalentStatus = "sourced" | "shortlisted" | "rejected" | "contacted";
 export type CandidateStatus = TalentStatus; // backward compat alias
-export type NotificationType = "new_job_draft" | "job_assigned" | "search_complete" | "search_failed";
+export type NotificationType = "new_job_draft" | "job_assigned" | "search_complete" | "search_failed" | "pulse_mention";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type TalentSourceType = "INTERNAL" | "SELF_REGISTERED" | "REFERRAL" | "AGENCY" | "JOB_BOARD";
 export type TalentStatusType = "ACTIVE" | "INACTIVE" | "PLACED" | "BLACKLISTED";
@@ -23,6 +26,7 @@ export interface User {
 
 export interface Job {
   id: string;
+  // Original fields (email-agent compat)
   title: string;
   skills: string[];
   experience_min: number | null;
@@ -40,6 +44,63 @@ export interface Job {
   approved_at: string | null;
   created_at: string;
   updated_at: string;
+  // Rich job fields (v2)
+  job_type: JobType | null;
+  work_mode: WorkMode | null;
+  job_status: JobPostingStatus | null;
+  is_active: boolean;
+  company: string | null;
+  channel: string | null;
+  approval_status: ApprovalStatus | null;
+  approval_note: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  currency: string;
+  pay_rate_min: number | null;
+  pay_rate_max: number | null;
+  bill_rate_min: number | null;
+  bill_rate_max: number | null;
+  required_skills: string[];
+  nice_to_have: string[];
+  visa_requirements: string[];
+  due_date: string | null;
+  application_deadline: string | null;
+  openings: number;
+  client_name: string | null;
+  client_contact: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+  end_client_name: string | null;
+  end_client_contact: string | null;
+  end_client_email: string | null;
+  end_client_phone: string | null;
+  vendor_name: string | null;
+  vendor_contact: string | null;
+  vendor_email: string | null;
+  vendor_phone: string | null;
+  posted_by_id: string | null;
+  case_id: string | null;
+  internal_bill_rate: number | null;
+  bill_rate_margin: number | null;
+  submitted_by_name: string | null;
+  submitted_by_email: string | null;
+  submitted_by_phone: string | null;
+}
+
+export interface JobNote {
+  id: string;
+  job_id: string;
+  user_id: string;
+  content: string;
+  mentions: string[];
+  created_at: string;
+  users: { id: string; name: string } | null;
+}
+
+export interface MentionUser {
+  id: string;
+  name: string;
+  role: string;
 }
 
 export interface JobAssignment {

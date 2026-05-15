@@ -61,7 +61,7 @@ export default function EditTalentPage() {
 
   return (
     <>
-      <Shell role="recruiter" userName="Priya Nair" pageTitle={`Edit — ${displayName}`} pageSubtitle="Update talent profile">
+      <Shell role="recruiter" pageTitle={`Edit — ${displayName}`} pageSubtitle="Update talent profile">
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}

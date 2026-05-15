@@ -75,7 +75,7 @@ export default function TalentDetailPage() {
 
   return (
     <>
-      <Shell role="recruiter" userName="Priya Nair" pageTitle={displayName || "Talent Profile"} pageSubtitle="Talent details">
+      <Shell role="recruiter" pageTitle={displayName || "Talent Profile"} pageSubtitle="Talent details">
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}

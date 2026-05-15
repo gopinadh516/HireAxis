@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { Shell } from "@/components/layout/shell";
 import { AssignmentCard } from "@/components/recruiter/assignment-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import { useRecruiterDashboard } from "@/hooks/use-recruiter-dashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { InboxIcon } from "lucide-react";
+import { InboxIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import type { AssignmentStatus } from "@/lib/database.types";
@@ -34,26 +36,33 @@ export default function RecruiterJobsPage() {
 
   return (
     <>
-      <Shell role="recruiter" userName="Priya Nair" pageTitle="My Jobs" pageSubtitle="All assigned job requirements">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | AssignmentStatus)}>
-          <TabsList className="h-8 gap-0.5 bg-muted p-0.5">
-            {TABS.map(({ value, label }) => {
-              const count = value === "all" ? assignments.length : assignments.filter((a) => a.status === value).length;
-              return (
-                <TabsTrigger key={value} value={value} className="h-7 px-3 text-xs gap-1.5">
-                  {label}
-                  {count > 0 && (
-                    <span className="rounded-full bg-muted-foreground/15 px-1.5 py-px text-[10px] font-medium">
-                      {count}
-                    </span>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </Tabs>
+      <Shell role="recruiter" pageTitle="My Jobs" pageSubtitle="All assigned job requirements">
+        <div className="mb-4 flex items-center justify-between">
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | AssignmentStatus)}>
+            <TabsList className="h-8 gap-0.5 bg-muted p-0.5">
+              {TABS.map(({ value, label }) => {
+                const count = value === "all" ? assignments.length : assignments.filter((a) => a.status === value).length;
+                return (
+                  <TabsTrigger key={value} value={value} className="h-7 px-3 text-xs gap-1.5">
+                    {label}
+                    {count > 0 && (
+                      <span className="rounded-full bg-muted-foreground/15 px-1.5 py-px text-[10px] font-medium">
+                        {count}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </Tabs>
+          <Link href="/recruiter/jobs/new">
+            <Button size="sm" className="h-8 gap-1.5 text-xs">
+              <PlusIcon className="size-3.5" /> Post Job
+            </Button>
+          </Link>
+        </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3">
           {loading ? (
             [1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)
           ) : filtered.length === 0 ? (

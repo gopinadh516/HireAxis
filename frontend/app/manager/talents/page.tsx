@@ -25,6 +25,7 @@ import {
   StarIcon,
   StarOffIcon,
   PlusIcon,
+  TrashIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Talent } from "@/lib/database.types";
@@ -68,12 +69,15 @@ function TalentRow({
   talent,
   showPoolAction,
   onPoolToggled,
+  onDelete,
 }: {
   talent: Talent;
   showPoolAction: boolean;
   onPoolToggled: () => void;
+  onDelete: (id: string) => void;
 }) {
   const [toggling, setToggling] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const displayName = talent.first_name
     ? `${talent.first_name} ${talent.last_name ?? ""}`.trim()
     : talent.name;
@@ -137,7 +141,7 @@ function TalentRow({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.preventDefault()}>
           <SourceBadge source={talent.talent_source} />
           {showPoolAction && (
             <Button
@@ -151,6 +155,35 @@ function TalentRow({
                 ? <><StarOffIcon className="size-3" /> Remove from Pool</>
                 : <><StarIcon className="size-3" /> Add to Pool</>
               }
+            </Button>
+          )}
+          {confirmDelete ? (
+            <>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(talent.id); }}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(false); }}
+              >
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-muted-foreground hover:text-destructive"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(true); }}
+            >
+              <TrashIcon className="size-3.5" />
             </Button>
           )}
         </div>
@@ -182,11 +215,21 @@ export default function ManagerTalentsPage() {
     refetch();
   }, [refetch]);
 
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      await apiFetch(`/api/talents/${id}`, { method: "DELETE" });
+      toast.success("Talent deleted");
+      refetch();
+    } catch {
+      toast.error("Failed to delete talent");
+    }
+  }, [refetch]);
+
   const totalPages = Math.ceil(total / 20);
 
   return (
     <>
-      <Shell role="manager" userName="Arjun Sharma" pageTitle="Talents" pageSubtitle={`${total} talent${total !== 1 ? "s" : ""} ${activeTabDef.isPool ? "in pool" : "total"}`}>
+      <Shell role="manager" pageTitle="Talents" pageSubtitle={`${total} talent${total !== 1 ? "s" : ""} ${activeTabDef.isPool ? "in pool" : "total"}`}>
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border mb-4">
           {SOURCE_TABS.map((tab) => (
@@ -276,6 +319,7 @@ export default function ManagerTalentsPage() {
                 talent={t}
                 showPoolAction={true}
                 onPoolToggled={handlePoolToggled}
+                onDelete={handleDelete}
               />
             ))
           )}

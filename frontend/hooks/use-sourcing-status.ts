@@ -23,7 +23,7 @@ export function useSourcingStatus(jobId: string) {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/jobs/${jobId}/sourcing-status`);
+      const res = await fetch(`${API_URL}/api/jobs/${jobId}/sourcing-status`);
       if (!res.ok) return;
       const data = await res.json();
       setTask(data.status ? data : null);
@@ -57,7 +57,7 @@ export function useSourcingStatus(jobId: string) {
   async function trigger(triggeredBy?: string) {
     setTriggering(true);
     try {
-      const res = await fetch(`${API_URL}/jobs/${jobId}/source-talents`, {
+      const res = await fetch(`${API_URL}/api/jobs/${jobId}/source-talents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ triggered_by: triggeredBy ?? null }),

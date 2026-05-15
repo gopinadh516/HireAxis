@@ -11,9 +11,12 @@ import {
   BellIcon,
   LogOutIcon,
   CheckCircleIcon,
+  UserIcon,
+  ClipboardListIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { usePendingCount } from "@/hooks/use-talents";
+import { useAuth } from "@/contexts/auth-context";
 
 interface NavItem {
   label: string;
@@ -23,29 +26,58 @@ interface NavItem {
   dynamicBadge?: boolean;
 }
 
+const adminNav: NavItem[] = [
+  { label: "Dashboard", href: "/admin",       icon: LayoutDashboardIcon },
+  { label: "Users",     href: "/admin/users", icon: UsersIcon },
+];
+
 const managerNav: NavItem[] = [
-  { label: "Dashboard",     href: "/manager",               icon: LayoutDashboardIcon },
-  { label: "Jobs",          href: "/manager/jobs",          icon: BriefcaseIcon },
-  { label: "Talents",       href: "/manager/talents",       icon: UsersIcon },
-  { label: "Approvals",     href: "/manager/approvals",     icon: CheckCircleIcon, dynamicBadge: true },
-  { label: "Notifications", href: "/manager/notifications", icon: BellIcon, badge: 3 },
+  { label: "Dashboard",     href: "/manager",                    icon: LayoutDashboardIcon },
+  { label: "Job Basket",    href: "/manager/jobs",               icon: BriefcaseIcon },
+  { label: "My Work List",  href: "/manager/my-work-list",       icon: ClipboardListIcon },
+  { label: "Talents",       href: "/manager/talents",            icon: UsersIcon },
+  { label: "Approvals",     href: "/manager/approvals",          icon: CheckCircleIcon, dynamicBadge: true },
+  { label: "Notifications", href: "/manager/notifications",      icon: BellIcon, badge: 3 },
 ];
 
 const recruiterNav: NavItem[] = [
-  { label: "Dashboard", href: "/recruiter",         icon: LayoutDashboardIcon },
-  { label: "My Jobs",   href: "/recruiter/jobs",    icon: BriefcaseIcon },
-  { label: "Talents",   href: "/recruiter/talents", icon: UsersIcon },
+  { label: "Dashboard",    href: "/recruiter",                  icon: LayoutDashboardIcon },
+  { label: "My Jobs",      href: "/recruiter/jobs",             icon: BriefcaseIcon },
+  { label: "My Work List", href: "/recruiter/my-work-list",     icon: ClipboardListIcon },
+  { label: "Talents",      href: "/recruiter/talents",          icon: UsersIcon },
 ];
 
 interface SidebarProps {
-  role: "manager" | "recruiter";
-  userName: string;
+  role: "manager" | "recruiter" | "super_admin";
 }
 
-export function Sidebar({ role, userName }: SidebarProps) {
+function roleBadgeClass(role: string) {
+  if (role === "super_admin") return "bg-amber-500/15 text-amber-600";
+  if (role === "manager") return "bg-blue-500/15 text-blue-600";
+  return "bg-violet-500/15 text-violet-600";
+}
+
+function roleLabel(role: string) {
+  if (role === "super_admin") return "Super Admin";
+  if (role === "manager") return "Manager";
+  return "Recruiter";
+}
+
+export function Sidebar({ role }: SidebarProps) {
   const pathname = usePathname();
-  const nav = role === "manager" ? managerNav : recruiterNav;
+  const { user, signOut } = useAuth();
   const pendingCount = usePendingCount();
+
+  const nav =
+    role === "super_admin"
+      ? adminNav
+      : role === "manager"
+      ? managerNav
+      : recruiterNav;
+
+  const initials = user?.name
+    ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : "?";
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-border bg-sidebar">
@@ -60,10 +92,10 @@ export function Sidebar({ role, userName }: SidebarProps) {
       {/* Role pill */}
       <div className="px-4 pt-4">
         <div className="rounded-md bg-accent px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {role}
+          <p className={cn("text-[10px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 inline-block", roleBadgeClass(role))}>
+            {roleLabel(role)}
           </p>
-          <p className="mt-0.5 text-sm font-medium text-foreground">{userName}</p>
+          <p className="mt-1 text-sm font-medium text-foreground truncate">{user?.name ?? "—"}</p>
         </div>
       </div>
 
@@ -96,8 +128,30 @@ export function Sidebar({ role, userName }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border p-3">
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+      <div className="border-t border-border p-3 space-y-0.5">
+        {/* User info + initials */}
+        <div className="flex items-center gap-2.5 px-3 py-2">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+            {initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground truncate">{user?.name ?? "—"}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{user?.email ?? ""}</p>
+          </div>
+        </div>
+
+        <Link
+          href="/profile"
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <UserIcon className="size-4" />
+          Profile
+        </Link>
+
+        <button
+          onClick={signOut}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
           <LogOutIcon className="size-4" />
           Sign out
         </button>

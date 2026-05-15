@@ -66,7 +66,7 @@ export default function ManagerNewTalentPage() {
 
   return (
     <>
-      <Shell role="manager" userName="Arjun Sharma" pageTitle="Add Talent" pageSubtitle="Add a new talent to the pool">
+      <Shell role="manager" pageTitle="Add Talent" pageSubtitle="Add a new talent to the pool">
         <TalentForm mode="create" onSubmit={handleSubmit} submitting={submitting} />
       </Shell>
       <Toaster position="top-right" richColors />

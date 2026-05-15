@@ -33,6 +33,11 @@ export function AssignmentCard({ assignment, onStartSearch }: AssignmentCardProp
         <div className="min-w-0 flex-1">
           {/* Header */}
           <div className="flex items-center gap-2 flex-wrap">
+            {job.case_id && (
+              <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold shrink-0">
+                {job.case_id}
+              </span>
+            )}
             <h3 className="text-sm font-semibold text-foreground truncate">{job.title}</h3>
             <StatusBadge status={assignment.status} />
           </div>

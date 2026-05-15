@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { Job, JobAssignment, Talent, JobTalent } from "@/lib/database.types";
 
 // Will be replaced with real auth later
-export const RECRUITER_ID = "00000000-0000-0000-0000-000000000002";
+export const RECRUITER_ID = ""; // replaced by useAuth().user?.id
 
 export interface AssignmentWithJob extends JobAssignment {
   jobs: Job;

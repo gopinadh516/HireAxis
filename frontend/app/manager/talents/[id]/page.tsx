@@ -92,7 +92,7 @@ export default function ManagerTalentDetailPage() {
 
   return (
     <>
-      <Shell role="manager" userName="Arjun Sharma" pageTitle={displayName || "Talent Profile"} pageSubtitle="Talent details">
+      <Shell role="manager" pageTitle={displayName || "Talent Profile"} pageSubtitle="Talent details">
         <Link href="/manager/talents">
           <Button variant="ghost" size="sm" className="mb-4 h-8 gap-1.5 text-xs -ml-1">
             <ArrowLeftIcon className="size-3.5" /> Back to Talents

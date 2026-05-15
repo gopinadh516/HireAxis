@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import type { Job, User } from "@/lib/database.types";
 
-export const MANAGER_ID = "b640078d-41a4-4f2c-8255-26d33a1c85bb"; // Arjun Sharma (manager) — replace with real auth later
+export const MANAGER_ID = ""; // replaced by useAuth().user?.id
 
 export function useManagerDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -53,7 +53,7 @@ export function useManagerDashboard() {
   }, [fetchJobs, fetchRecruiters]);
 
   async function approveJob(jobId: string, recruiterId: string) {
-    const res = await fetch(`http://localhost:8000/jobs/${jobId}/approve`, {
+    const res = await fetch(`http://localhost:8000/api/jobs/${jobId}/approve`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ approved_by: MANAGER_ID, recruiter_id: recruiterId }),
@@ -64,7 +64,7 @@ export function useManagerDashboard() {
   }
 
   async function rejectJob(jobId: string) {
-    const res = await fetch(`http://localhost:8000/jobs/${jobId}/reject?rejected_by=${MANAGER_ID}`, {
+    const res = await fetch(`http://localhost:8000/api/jobs/${jobId}/reject?rejected_by=${MANAGER_ID}`, {
       method: "PATCH",
     });
     if (!res.ok) throw new Error("Failed to reject job");

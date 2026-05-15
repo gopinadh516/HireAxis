@@ -27,7 +27,7 @@ export default function ManagerDashboard() {
 
   return (
     <>
-      <Shell role="manager" userName="Arjun Sharma" pageTitle="Dashboard" pageSubtitle="Overview of all hiring activity">
+      <Shell role="manager" pageTitle="Dashboard" pageSubtitle="Overview of all hiring activity">
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {stats.map(({ label, value, icon: Icon, color, bg }) => (

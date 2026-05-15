@@ -181,7 +181,7 @@ export default function TalentsPage() {
 
   return (
     <>
-      <Shell role="recruiter" userName="Priya Nair" pageTitle="Talents" pageSubtitle={`${total} talent${total !== 1 ? "s" : ""} in pool`}>
+      <Shell role="recruiter" pageTitle="Talents" pageSubtitle={`${total} talent${total !== 1 ? "s" : ""} in pool`}>
         {/* Source tabs */}
         <div className="flex items-center gap-1 border-b border-border mb-4">
           {SOURCE_TABS.map((tab) => (
