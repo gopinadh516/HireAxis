@@ -60,13 +60,14 @@ export default function NewJobPage() {
       };
 
       if (isContract) {
-        payload.end_client_name = data.end_client_name;
-        payload.company = data.end_client_name;
+        payload.end_client_name = data.end_client_name || null;
+        payload.company = data.end_client_name || null;
         if (data.pay_rate) { payload.pay_rate_min = Number(data.pay_rate); payload.pay_rate_max = Number(data.pay_rate); }
         if (data.bill_rate) { payload.bill_rate_min = Number(data.bill_rate); payload.bill_rate_max = Number(data.bill_rate); }
       } else {
-        payload.company = data.company;
-        payload.client_name = data.company;
+        payload.company = data.company || null;
+        payload.client_name = data.company || null;
+        payload.end_client_name = data.end_client_name || null;
         if (data.salary) { payload.salary_min = Number(data.salary); payload.salary_max = Number(data.salary); }
       }
 

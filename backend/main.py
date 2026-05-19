@@ -25,13 +25,11 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    import logging, traceback
+    logging.error("Unhandled exception: %s\n%s", exc, traceback.format_exc())
     origin = request.headers.get("origin", "")
     cors_origin = origin if origin in ALLOWED_ORIGINS else ALLOWED_ORIGINS[0]
     detail = str(exc)
-    if "job_notes" in detail and ("does not exist" in detail or "schema cache" in detail):
-        detail = "Table 'job_notes' missing — run the Pulse SQL migration in Supabase SQL Editor."
-    elif "does not exist" in detail or "schema cache" in detail:
-        detail = "Database column missing — run the migration in Supabase SQL Editor: ALTER TABLE jobs ADD COLUMN IF NOT EXISTS case_id TEXT UNIQUE; ALTER TABLE jobs ADD COLUMN IF NOT EXISTS internal_bill_rate NUMERIC; ALTER TABLE jobs ADD COLUMN IF NOT EXISTS bill_rate_margin NUMERIC DEFAULT 15;"
     return JSONResponse(
         status_code=500,
         content={"detail": detail},

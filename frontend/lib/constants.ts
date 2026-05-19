@@ -148,3 +148,8 @@ export function formatSalary(
   if (max != null) return `Up to ${fmt(max)}${suffix}`;
   return null;
 }
+
+export function formatJobId(job: { job_number?: number | null }): string {
+  if (job.job_number != null) return `JOB-${job.job_number.toString().padStart(3, "0")}`;
+  return "JOB-???";
+}

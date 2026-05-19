@@ -21,6 +21,7 @@ export interface JobFilters {
   approval_status?: string;
   source?: string;
   channel?: string;
+  pending_only?: boolean;
   page?: number;
 }
 
@@ -43,6 +44,7 @@ export function useJobs(filters: JobFilters = {}) {
       if (filters.approval_status)  params.set("approval_status", filters.approval_status);
       if (filters.source)           params.set("source", filters.source);
       if (filters.channel)          params.set("channel", filters.channel);
+      if (filters.pending_only)     params.set("pending_only", "true");
       if (filters.page)             params.set("page", String(filters.page));
 
       const result = await apiFetch<JobListResponse>(`/api/jobs/?${params}`);
@@ -62,6 +64,7 @@ export function useJobs(filters: JobFilters = {}) {
     filters.approval_status,
     filters.source,
     filters.channel,
+    filters.pending_only,
     filters.page,
   ]);
 

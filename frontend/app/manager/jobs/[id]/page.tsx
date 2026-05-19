@@ -1,12 +1,15 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Shell } from "@/components/layout/shell";
+import { PipelineBar } from "@/components/jobs/PipelineBar";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { JobTypeBadge } from "@/components/jobs/JobTypeBadge";
@@ -24,8 +27,9 @@ import {
   CalendarIcon, MailIcon, PhoneIcon, UserIcon,
   ToggleLeftIcon, ToggleRightIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon,
   FolderOpenIcon, CheckCircle2Icon, PlusIcon, SaveIcon, ClipboardCheckIcon,
+  ChevronRightIcon, MessageCircleIcon,
 } from "lucide-react";
-import { CONTRACT_TYPES, formatSalary, WORK_MODE_LABELS, VISA_STATUS_LABELS, getUrgency, urgencyDaysLeft, URGENCY_LABEL, URGENCY_CLASS } from "@/lib/constants";
+import { CONTRACT_TYPES, formatSalary, formatJobId, WORK_MODE_LABELS, VISA_STATUS_LABELS, getUrgency, urgencyDaysLeft, URGENCY_LABEL, URGENCY_CLASS } from "@/lib/constants";
 import { useAuth } from "@/contexts/auth-context";
 import type { Job } from "@/lib/database.types";
 
@@ -422,6 +426,270 @@ function DatesCard({ job, onSaved }: { job: Job; onSaved: (updated: Partial<Job>
   );
 }
 
+// ── Client & Vendor Card ──────────────────────────────────────────────────────
+
+type SectionKey = "client" | "vendor";
+
+function ClientVendorCard({ job, jobId, isContract, onSaved }: {
+  job: Job; jobId: string; isContract: boolean;
+  onSaved: (updated: Partial<Job>) => void;
+}) {
+  const [editing, setEditing] = useState<SectionKey | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const clientFields = isContract
+    ? { name: job.end_client_name, contact: job.end_client_contact, email: job.end_client_email, phone: job.end_client_phone }
+    : { name: job.company, contact: job.client_contact, email: job.client_email, phone: job.client_phone };
+
+  const vendorFields = { name: job.vendor_name, contact: job.vendor_contact, email: job.vendor_email, phone: job.vendor_phone };
+
+  const [clientForm, setClientForm] = useState({ name: clientFields.name ?? "", contact: clientFields.contact ?? "", email: clientFields.email ?? "", phone: clientFields.phone ?? "" });
+  const [vendorForm, setVendorForm] = useState({ name: vendorFields.name ?? "", contact: vendorFields.contact ?? "", email: vendorFields.email ?? "", phone: vendorFields.phone ?? "" });
+
+  async function save(section: SectionKey) {
+    setSaving(true);
+    try {
+      let patch: Partial<Job>;
+      if (section === "client") {
+        patch = isContract
+          ? { end_client_name: clientForm.name || null, end_client_contact: clientForm.contact || null, end_client_email: clientForm.email || null, end_client_phone: clientForm.phone || null }
+          : { company: clientForm.name || null, client_contact: clientForm.contact || null, client_email: clientForm.email || null, client_phone: clientForm.phone || null };
+      } else {
+        patch = { vendor_name: vendorForm.name || null, vendor_contact: vendorForm.contact || null, vendor_email: vendorForm.email || null, vendor_phone: vendorForm.phone || null };
+      }
+      await apiFetch(`/api/jobs/${jobId}`, { method: "PATCH", body: JSON.stringify(patch) });
+      onSaved(patch);
+      setEditing(null);
+      toast.success(`${section === "client" ? "Client" : "Vendor"} details saved`);
+    } catch { toast.error("Failed to save"); }
+    finally { setSaving(false); }
+  }
+
+  function ContactRow({ label, value, href }: { label: string; value: string | null; href?: string }) {
+    if (!value) return null;
+    return (
+      <div className="flex items-start gap-1.5">
+        <span className="text-[10px] text-muted-foreground w-14 shrink-0 pt-0.5">{label}</span>
+        {href
+          ? <a href={href} className="text-xs text-primary hover:underline break-all">{value}</a>
+          : <span className="text-xs font-medium">{value}</span>}
+      </div>
+    );
+  }
+
+  function SectionView({ label, fields, section }: { label: string; fields: typeof clientFields; section: SectionKey }) {
+    const hasAny = !!(fields.name || fields.contact || fields.email || fields.phone);
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+          <Button variant="ghost" size="icon" className="size-5 shrink-0" onClick={() => setEditing(editing === section ? null : section)}>
+            <PencilIcon className="size-2.5" />
+          </Button>
+        </div>
+        {!hasAny && editing !== section && (
+          <p className="text-xs text-muted-foreground italic">Not set</p>
+        )}
+        {hasAny && editing !== section && (
+          <div className="space-y-1">
+            <ContactRow label="Company" value={fields.name} />
+            <ContactRow label="Contact" value={fields.contact} />
+            <ContactRow label="Email" value={fields.email} href={fields.email ? `mailto:${fields.email}` : undefined} />
+            <ContactRow label="Phone" value={fields.phone} />
+          </div>
+        )}
+        {editing === section && (
+          <div className="space-y-2 pt-1">
+            {[
+              { lbl: "Company", key: "name", type: "text", ph: section === "vendor" ? "TechStaff LLC" : "BigBank Inc" },
+              { lbl: "Contact", key: "contact", type: "text", ph: "Jane Smith" },
+              { lbl: "Email", key: "email", type: "email", ph: "jane@company.com" },
+              { lbl: "Phone", key: "phone", type: "tel", ph: "+1 555 000 0000" },
+            ].map(({ lbl, key, type, ph }) => (
+              <div key={key} className="space-y-0.5">
+                <Label className="text-[10px] text-muted-foreground">{lbl}</Label>
+                <Input
+                  type={type}
+                  value={section === "client" ? clientForm[key as keyof typeof clientForm] : vendorForm[key as keyof typeof vendorForm]}
+                  onChange={(e) => section === "client"
+                    ? setClientForm((f) => ({ ...f, [key]: e.target.value }))
+                    : setVendorForm((f) => ({ ...f, [key]: e.target.value }))}
+                  placeholder={ph}
+                  className="h-6 text-xs"
+                />
+              </div>
+            ))}
+            <div className="flex gap-1.5 pt-1">
+              <Button variant="outline" size="sm" className="h-6 text-[11px]" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button size="sm" className="h-6 text-[11px] gap-1 flex-1" onClick={() => save(section)} disabled={saving}>
+                <SaveIcon className="size-2.5" />{saving ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Client & Vendor</p>
+      <SectionView label={isContract ? "End Client" : "Client"} fields={clientFields} section="client" />
+      <div className="border-t border-border" />
+      <SectionView label="Vendor / MSP" fields={vendorFields} section="vendor" />
+    </div>
+  );
+}
+
+// ── Details Card ─────────────────────────────────────────────────────────────
+
+function DetailsCard({ job, isContract, salaryText, expText, onSaved }: {
+  job: Job; isContract: boolean; salaryText: string | null; expText: string | null;
+  onSaved: (updated: Partial<Job>) => void;
+}) {
+  const [editingDeadline, setEditingDeadline] = useState(false);
+  const [deadlineVal, setDeadlineVal] = useState(job.application_deadline?.slice(0, 10) ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function saveDeadline() {
+    setSaving(true);
+    try {
+      await apiFetch(`/api/jobs/${job.id}`, { method: "PATCH", body: JSON.stringify({ application_deadline: deadlineVal || null }) });
+      onSaved({ application_deadline: deadlineVal || null });
+      setEditingDeadline(false);
+      toast.success("Deadline saved");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setSaving(false); }
+  }
+
+  const fmtDate = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
+  const urgency = job.application_deadline ? getUrgency(job.application_deadline) : null;
+  const daysLeft = job.application_deadline ? urgencyDaysLeft(job.application_deadline) : null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Details</p>
+      <dl className="space-y-2 text-sm">
+        {job.location && (
+          <div className="flex items-center gap-2"><MapPinIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{job.location}</span></div>
+        )}
+        {job.work_mode && (
+          <div className="flex items-center gap-2"><BriefcaseIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{WORK_MODE_LABELS[job.work_mode] ?? job.work_mode}</span></div>
+        )}
+        <div className="flex items-center gap-2"><UsersIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{job.openings ?? job.headcount} opening{(job.openings ?? job.headcount) !== 1 ? "s" : ""}</span></div>
+        {salaryText && <div className="flex items-center gap-2"><span className="size-3.5 text-muted-foreground shrink-0">$</span><span>{salaryText}</span></div>}
+        {expText && <div className="flex items-center gap-2"><BriefcaseIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{expText}</span></div>}
+
+        {/* Application Deadline — editable */}
+        <div className="flex items-start gap-2 pt-1 border-t border-border">
+          <CalendarIcon className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-xs text-muted-foreground">Application Deadline</p>
+              {!editingDeadline && (
+                <Button variant="ghost" size="icon" className="size-5 shrink-0"
+                  onClick={() => { setDeadlineVal(job.application_deadline?.slice(0, 10) ?? ""); setEditingDeadline(true); }}>
+                  <PencilIcon className="size-2.5" />
+                </Button>
+              )}
+            </div>
+            {editingDeadline ? (
+              <div className="flex items-center gap-1.5 mt-1">
+                <Input type="date" value={deadlineVal} onChange={(e) => setDeadlineVal(e.target.value)} className="h-6 text-xs flex-1" />
+                <Button size="icon" className="size-6 shrink-0" onClick={saveDeadline} disabled={saving}><SaveIcon className="size-2.5" /></Button>
+                <Button variant="ghost" size="icon" className="size-6 shrink-0" onClick={() => setEditingDeadline(false)}>
+                  <span className="text-[10px] leading-none">✕</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                <p className="text-sm font-medium">
+                  {fmtDate(job.application_deadline) ?? <span className="text-xs text-muted-foreground italic font-normal">Not set</span>}
+                </p>
+                {urgency && urgency !== "low" && daysLeft != null && (
+                  <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${URGENCY_CLASS[urgency]}`}>
+                    {daysLeft === 0 ? "Due today" : daysLeft === 1 ? "1 day left" : `${daysLeft}d · ${URGENCY_LABEL[urgency]}`}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isContract && (job.bill_rate_min != null || job.bill_rate_max != null) && (
+          <div className="flex items-start gap-2 pt-1 border-t border-border">
+            <span className="size-3.5 text-muted-foreground shrink-0 mt-0.5">$</span>
+            <div>
+              <p className="text-xs text-muted-foreground leading-none mb-0.5">Customer Bill Rate</p>
+              <p className="text-sm font-medium">
+                {job.bill_rate_min != null && job.bill_rate_max != null && job.bill_rate_min !== job.bill_rate_max
+                  ? `$${job.bill_rate_min}–$${job.bill_rate_max}/hr`
+                  : `$${job.bill_rate_min ?? job.bill_rate_max}/hr`}
+              </p>
+            </div>
+          </div>
+        )}
+        {isContract && job.internal_bill_rate != null && (
+          <div className="flex items-start gap-2">
+            <span className="size-3.5 text-muted-foreground shrink-0 mt-0.5">$</span>
+            <div>
+              <p className="text-xs text-muted-foreground leading-none mb-0.5">Bytesoftware Bill Rate</p>
+              <p className="text-sm font-medium">${job.internal_bill_rate}/hr</p>
+            </div>
+          </div>
+        )}
+
+        {/* Submitted By — read only */}
+        {(job.submitted_by_name || job.submitted_by_email) && (
+          <div className="flex items-start gap-2 pt-1 border-t border-border">
+            <UserIcon className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground mb-0.5">Submitted By</p>
+              {job.submitted_by_name && <p className="text-sm font-medium">{job.submitted_by_name}</p>}
+              {job.submitted_by_email && <p className="text-xs text-muted-foreground">{job.submitted_by_email}</p>}
+              {job.submitted_by_phone && <p className="text-xs text-muted-foreground">{job.submitted_by_phone}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Hiring Manager — read only */}
+        {(() => {
+          const hmName  = isContract ? job.end_client_contact : job.client_contact;
+          const hmEmail = isContract ? job.end_client_email   : job.client_email;
+          const hmPhone = isContract ? job.end_client_phone   : job.client_phone;
+          if (!hmName && !hmEmail) return null;
+          return (
+            <div className="flex items-start gap-2 pt-1 border-t border-border">
+              <UserIcon className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">Hiring Manager</p>
+                {hmName  && <p className="text-sm font-medium">{hmName}</p>}
+                {hmEmail && <p className="text-xs text-muted-foreground">{hmEmail}</p>}
+                {hmPhone && <p className="text-xs text-muted-foreground">{hmPhone}</p>}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Visa Requirements */}
+        {job.visa_requirements?.length > 0 && (
+          <div className="pt-1 border-t border-border">
+            <p className="text-xs text-muted-foreground mb-1.5">Visa Requirements</p>
+            <div className="flex flex-wrap gap-1">
+              {job.visa_requirements.map((v) => (
+                <span key={v} className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-[11px] font-medium">
+                  {VISA_STATUS_LABELS[v] ?? v}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </dl>
+    </div>
+  );
+}
+
 // ── Submitted By Card ─────────────────────────────────────────────────────────
 
 function SubmittedByCard({ job, onSaved }: { job: Job; onSaved: (updated: Partial<Job>) => void }) {
@@ -791,20 +1059,26 @@ function AssignToAction({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const CHECKLIST_ITEMS = [
-  "Verified with Hiring Manager",
-];
-
 function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: string) => void }) {
   const { user } = useAuth();
-  const [step, setStep] = useState<"checklist" | "assign">("checklist");
-  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [step, setStep] = useState<"contact" | "assign">("contact");
+  const [contactNotes, setContactNotes] = useState("");
   const [recruiters, setRecruiters] = useState<Recruiter[]>([]);
   const [recruiterId, setRecruiterId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const isContract = (CONTRACT_TYPES as readonly string[]).includes(job.job_type ?? "");
-  // Use the lowest parsed rate as the default customer bill rate
+  const hmName  = isContract ? job.end_client_contact : job.client_contact;
+  const hmEmail = isContract ? job.end_client_email   : job.client_email;
+  const hmPhone = isContract ? job.end_client_phone   : job.client_phone;
+
+  const emailHref = hmEmail
+    ? `mailto:${hmEmail}?subject=${encodeURIComponent(`Job Validation: ${job.title ?? ""}`)}&body=${encodeURIComponent(`Hi ${hmName ?? ""},\n\nI would like to discuss the job requirement "${job.title ?? ""}".\n\nPlease let me know a convenient time.\n\nBest regards`)}`
+    : null;
+  const whatsappHref = hmPhone
+    ? `https://wa.me/${hmPhone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hi ${hmName ?? ""}, I'd like to discuss the job requirement "${job.title ?? ""}". When would be a good time to connect?`)}`
+    : null;
+
   const existingCustomerRate = job.bill_rate_min ?? job.bill_rate_max ?? null;
   const [customerRateInput, setCustomerRateInput] = useState(
     existingCustomerRate != null ? String(existingCustomerRate) : ""
@@ -817,7 +1091,6 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
   const clampedBillRate = Math.min(billRateValue, maxSlider);
   const margin = customerRate ? Math.round((1 - clampedBillRate / customerRate) * 100 * 100) / 100 : 15;
 
-  const allChecked = CHECKLIST_ITEMS.every((item) => checks[item]);
   const billRateReady = !isContract || (customerRate != null && clampedBillRate > 0);
 
   useEffect(() => {
@@ -848,101 +1121,120 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
     }
   }
 
+  const steps = [
+    { key: "contact", label: "Contact HM" },
+    { key: "assign",  label: "Assign & Proceed" },
+  ];
+
   return (
     <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-4">
+      {/* Header + step pills */}
       <div className="flex items-center gap-2">
-        <FolderOpenIcon className="size-4 text-primary" />
-        <p className="text-sm font-semibold text-primary">Initiate Case</p>
+        <FolderOpenIcon className="size-4 text-primary shrink-0" />
+        <p className="text-sm font-semibold text-primary">Validate Job</p>
+      </div>
+      <div className="flex items-center gap-1.5">
+        {steps.map((s, i) => (
+          <div key={s.key} className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border
+              ${step === s.key
+                ? "bg-primary text-primary-foreground border-primary"
+                : step === "assign" && s.key === "contact"
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : "bg-muted text-muted-foreground border-border"}`}>
+              {step === "assign" && s.key === "contact" && <CheckCircle2Icon className="size-2.5" />}
+              {s.label}
+            </span>
+            {i < steps.length - 1 && <ChevronRightIcon className="size-3 text-muted-foreground shrink-0" />}
+          </div>
+        ))}
       </div>
 
-      {step === "checklist" && (
-        <>
-          <p className="text-xs text-muted-foreground">Confirm all items before creating the case:</p>
-          <div className="space-y-2.5">
-            {CHECKLIST_ITEMS.map((item) => (
-              <div key={item} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={item}
-                  checked={!!checks[item]}
-                  onCheckedChange={(v) => setChecks((c) => ({ ...c, [item]: !!v }))}
-                />
-                <label htmlFor={item} className="text-xs cursor-pointer">{item}</label>
-              </div>
-            ))}
+      {/* ── Step 1: Contact Hiring Manager ── */}
+      {step === "contact" && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-card p-3 space-y-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <UserIcon className="size-3.5" /> Hiring Manager
+            </p>
+            {hmName || hmEmail || hmPhone ? (
+              <>
+                {hmName  && <p className="text-sm font-medium">{hmName}</p>}
+                {hmEmail && <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><MailIcon className="size-3 shrink-0" />{hmEmail}</div>}
+                {hmPhone && <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><PhoneIcon className="size-3 shrink-0" />{hmPhone}</div>}
+                <div className="flex gap-2 pt-1">
+                  {emailHref && (
+                    <a href={emailHref} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors">
+                      <MailIcon className="size-3 text-blue-500" /> Send Email
+                    </a>
+                  )}
+                  {whatsappHref && (
+                    <a href={whatsappHref} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors">
+                      <MessageCircleIcon className="size-3 text-emerald-500" /> WhatsApp
+                    </a>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No hiring manager details on file. Please update the job record first.</p>
+            )}
           </div>
-          <Button
-            size="sm"
-            className="w-full h-8 text-xs gap-1.5"
-            disabled={!allChecked}
-            onClick={() => setStep("assign")}
-          >
-            <CheckCircle2Icon className="size-3.5" /> Proceed to Assign
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Contact Notes <span className="text-destructive">*</span></Label>
+            <Textarea
+              value={contactNotes}
+              onChange={(e) => setContactNotes(e.target.value)}
+              placeholder="Summarise the conversation — requirements confirmed, changes requested, key details noted…"
+              className="min-h-[90px] text-xs resize-none"
+            />
+          </div>
+
+          <Button size="sm" className="w-full h-8 text-xs gap-1.5" disabled={!contactNotes.trim()} onClick={() => setStep("assign")}>
+            Next — Assign Recruiter <ChevronRightIcon className="size-3.5" />
           </Button>
-        </>
+        </div>
       )}
 
+      {/* ── Step 2: Bill Rate + Assign ── */}
       {step === "assign" && (
         <div className="space-y-4">
           {isContract && (
             <div className={`rounded-lg border bg-card p-3 space-y-3 ${!billRateReady ? "border-destructive/50" : "border-border"}`}>
               <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Bill Rate <span className="text-destructive">*</span>
-                </p>
-                {!billRateReady && (
-                  <span className="text-[10px] text-destructive font-medium">Required</span>
-                )}
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Bill Rate <span className="text-destructive">*</span></p>
+                {!billRateReady && <span className="text-[10px] text-destructive font-medium">Required</span>}
               </div>
-
-              {/* Customer Bill Rate — always editable, pre-filled with lowest parsed rate */}
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-muted-foreground">Customer Bill Rate</span>
                 <div className="flex items-center gap-1.5">
                   <Input
-                    type="number"
-                    min={0}
-                    value={customerRateInput}
+                    type="number" min={0} value={customerRateInput} placeholder="e.g. 100"
+                    className="h-7 w-24 text-xs text-right"
                     onChange={(e) => {
                       setCustomerRateInput(e.target.value);
                       const r = parseFloat(e.target.value);
                       if (r > 0) setBillRateValue(Math.round(r * 0.85 * 100) / 100);
                     }}
-                    placeholder="e.g. 100"
-                    className="h-7 w-24 text-xs text-right"
                   />
                   <span className="text-xs text-muted-foreground">/hr</span>
                 </div>
               </div>
-
-              {/* Bill Rate slider */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Bill Rate</span>
-                  <span className="text-sm font-bold text-primary">
-                    {customerRate != null ? `$${clampedBillRate}/hr` : "—"}
-                  </span>
+                  <span className="text-xs text-muted-foreground">Bytesoftware Bill Rate</span>
+                  <span className="text-sm font-bold text-primary">{customerRate != null ? `$${clampedBillRate}/hr` : "—"}</span>
                 </div>
                 <Slider
-                  min={0}
-                  max={maxSlider}
-                  step={0.5}
-                  value={[clampedBillRate]}
-                  onValueChange={(vals) => {
-                    const v = Array.isArray(vals) ? (vals[0] ?? 0) : vals;
-                    setBillRateValue(Math.round(v * 100) / 100);
-                  }}
-                  disabled={customerRate == null}
-                  className="w-full"
+                  min={0} max={maxSlider} step={0.5} value={[clampedBillRate]} disabled={customerRate == null} className="w-full"
+                  onValueChange={(vals) => setBillRateValue(Math.round((Array.isArray(vals) ? (vals[0] ?? 0) : vals) * 100) / 100)}
                 />
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>$0</span><span>${maxSlider}/hr</span>
-                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground"><span>$0</span><span>${maxSlider}/hr</span></div>
               </div>
-
               {customerRate != null && (
-                <p className="text-[10px] text-muted-foreground">
-                  Margin: {Math.round(margin)}% �� recruiter will only see the Bill Rate.
-                </p>
+                <p className="text-[10px] text-muted-foreground">Margin: {Math.round(margin)}% — recruiter will only see the Bill Rate.</p>
               )}
             </div>
           )}
@@ -951,11 +1243,7 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
             <div className="flex items-center justify-between">
               <Label className="text-xs">Assign To <span className="text-destructive">*</span></Label>
               {user && recruiterId !== user.id && (
-                <button
-                  type="button"
-                  className="text-[10px] text-primary hover:underline font-medium"
-                  onClick={() => setRecruiterId(user.id)}
-                >
+                <button type="button" className="text-[10px] text-primary hover:underline font-medium" onClick={() => setRecruiterId(user.id)}>
                   Assign to self
                 </button>
               )}
@@ -963,7 +1251,7 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
             <Select value={recruiterId} onValueChange={(v) => setRecruiterId(v ?? "")}>
               <SelectTrigger className="h-8 text-xs">
                 {recruiterId
-                  ? <span>{recruiterId === user?.id ? `${user.name} (me)` : recruiters.find((r) => r.id === recruiterId)?.name}</span>
+                  ? <span>{recruiterId === user?.id ? `${user?.name} (me)` : recruiters.find((r) => r.id === recruiterId)?.name ?? "Selected"}</span>
                   : <SelectValue placeholder="Select person…" />}
               </SelectTrigger>
               <SelectContent>
@@ -983,10 +1271,7 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
                     <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1 pt-2">Managers</div>
                     {recruiters.filter((r) => r.role === "manager" && r.id !== user?.id).map((r) => (
                       <SelectItem key={r.id} value={r.id}>
-                        <div>
-                          <p className="text-xs font-medium">{r.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{r.email}</p>
-                        </div>
+                        <div><p className="text-xs font-medium">{r.name}</p><p className="text-[10px] text-muted-foreground">{r.email}</p></div>
                       </SelectItem>
                     ))}
                   </>
@@ -996,10 +1281,7 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
                     <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1 pt-2">Recruiters</div>
                     {recruiters.filter((r) => r.role === "recruiter").map((r) => (
                       <SelectItem key={r.id} value={r.id}>
-                        <div>
-                          <p className="text-xs font-medium">{r.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{r.email}</p>
-                        </div>
+                        <div><p className="text-xs font-medium">{r.name}</p><p className="text-[10px] text-muted-foreground">{r.email}</p></div>
                       </SelectItem>
                     ))}
                   </>
@@ -1009,17 +1291,9 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setStep("checklist")}>
-              Back
-            </Button>
-            <Button
-              size="sm"
-              className="h-8 text-xs flex-1 gap-1.5"
-              onClick={handleInitiate}
-              disabled={submitting || !recruiterId || !billRateReady}
-            >
-              <FolderOpenIcon className="size-3.5" />
-              {submitting ? "Initiating…" : "Initiate Case"}
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setStep("contact")}>Back</Button>
+            <Button size="sm" className="h-8 text-xs flex-1 gap-1.5" onClick={handleInitiate} disabled={submitting || !recruiterId || !billRateReady}>
+              <FolderOpenIcon className="size-3.5" />{submitting ? "Processing…" : "Proceed"}
             </Button>
           </div>
         </div>
@@ -1030,11 +1304,18 @@ function InitiateCasePanel({ job, onSuccess }: { job: Job; onSuccess: (caseId: s
 
 export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const { user } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [assignments, setAssignments] = useState<JobAssignmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [validatedWithHM, setValidatedWithHM] = useState(false);
+  const [contactVendorOpen, setContactVendorOpen] = useState(false);
+  const [vendorEmailSubject, setVendorEmailSubject] = useState("");
+  const [vendorEmailBody, setVendorEmailBody] = useState("");
+  const [vendorWhatsAppMsg, setVendorWhatsAppMsg] = useState("");
   const [descExpanded, setDescExpanded] = useState(false);
 
   useEffect(() => {
@@ -1048,8 +1329,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   }, [id]);
 
   function handleCaseInitiated(caseId: string) {
-    setJob((j) => j ? { ...j, case_id: caseId, status: "active", job_status: "OPEN", approval_status: "APPROVED" } : j);
+    setJob((j) => j ? { ...j, case_id: caseId, status: "active", job_status: "OPEN", approval_status: "APPROVED", pipeline_stage: "search" } : j);
     apiFetch<JobAssignmentRow[]>(`/api/jobs/${id}/assignments`).then(setAssignments).catch(() => {});
+    router.push(`/manager/jobs/${id}/search`);
   }
 
   function handleJobUpdate(patch: Partial<Job>) {
@@ -1061,11 +1343,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     setValidating(true);
     try {
       await apiFetch(`/api/jobs/${id}/start-validation`, { method: "PATCH" });
-      setJob((j) => j ? { ...j, job_status: "PENDING_VALIDATION" } : j);
-      toast.success("Job moved to Pending Validation");
+      await apiFetch(`/api/jobs/${id}/initiate-case`, {
+        method: "POST",
+        body: JSON.stringify({ bill_rate_margin: 15 }),
+      });
+      toast.success("Job validated — moving to Search");
+      router.push(`/manager/jobs/${id}/search`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to start validation");
-    } finally {
       setValidating(false);
     }
   }
@@ -1119,7 +1404,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   return (
     <>
-      <Shell role="manager" pageTitle={job.title}>
+      <Shell role="manager" pageTitle={job.title} pageSubtitle={formatJobId(job)}>
         <div className="mb-4 flex items-center justify-between">
           <Link href="/manager/jobs">
             <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs -ml-2">
@@ -1139,9 +1424,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
             {/* Header card */}
             <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-              <p className="text-[10px] font-mono text-muted-foreground tracking-wide select-all">
-                #{job.id.slice(0, 8).toUpperCase()}
-              </p>
+              <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-[11px] font-mono font-medium text-muted-foreground tracking-widest select-all">
+                {formatJobId(job)}
+              </span>
               <div className="flex flex-wrap gap-1.5">
                 <JobTypeBadge type={job.job_type} />
                 <JobStatusBadge status={jobStatus} />
@@ -1165,80 +1450,48 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
               <p className="text-sm text-muted-foreground">{job.company ?? job.end_client_name}</p>
             </div>
 
-            {/* Active toggle */}
-            <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Job Active</p>
-                <p className="text-xs text-muted-foreground">{job.is_active !== false ? "Visible to candidates" : "Hidden from candidates"}</p>
-              </div>
-              <button onClick={handleToggle} disabled={toggling} className="disabled:opacity-50">
-                {job.is_active !== false
-                  ? <ToggleRightIcon className="size-7 text-emerald-600" />
-                  : <ToggleLeftIcon className="size-7 text-muted-foreground" />}
-              </button>
-            </div>
-
             {/* Details */}
-            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Details</p>
-              <dl className="space-y-2 text-sm">
-                {job.location && (
-                  <div className="flex items-center gap-2"><MapPinIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{job.location}</span></div>
-                )}
-                {job.work_mode && (
-                  <div className="flex items-center gap-2"><BriefcaseIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{WORK_MODE_LABELS[job.work_mode] ?? job.work_mode}</span></div>
-                )}
-                <div className="flex items-center gap-2"><UsersIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{job.openings ?? job.headcount} opening{(job.openings ?? job.headcount) !== 1 ? "s" : ""}</span></div>
-                {salaryText && <div className="flex items-center gap-2"><span className="size-3.5 text-muted-foreground shrink-0">$</span><span>{salaryText}</span></div>}
-                {expText && <div className="flex items-center gap-2"><BriefcaseIcon className="size-3.5 text-muted-foreground shrink-0" /><span>{expText}</span></div>}
-              </dl>
-            </div>
+            <DetailsCard job={job} isContract={isContract} salaryText={salaryText} expText={expText} onSaved={handleJobUpdate} />
 
-            {/* Dates — always shown, editable */}
-            <DatesCard job={job} onSaved={handleJobUpdate} />
-
-            {/* Visa requirements */}
-            {job.visa_requirements?.length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Visa Requirements</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {job.visa_requirements.map((v) => (
-                    <span key={v} className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-xs">{VISA_STATUS_LABELS[v] ?? v}</span>
-                  ))}
-                </div>
+            {/* Description + Skills */}
+            {(job.description || displaySkills.length > 0) && (
+              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                {job.description && (
+                  <>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Job Description</p>
+                    <div className={isLongDesc && !descExpanded ? "line-clamp-5" : ""}>
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{job.description}</p>
+                    </div>
+                    {isLongDesc && (
+                      <button
+                        type="button"
+                        onClick={() => setDescExpanded((v) => !v)}
+                        className="flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        {descExpanded ? <><ChevronUpIcon className="size-3" /> Show less</> : <><ChevronDownIcon className="size-3" /> Show more</>}
+                      </button>
+                    )}
+                  </>
+                )}
+                {displaySkills.length > 0 && (
+                  <>
+                    {job.description && <div className="border-t border-border" />}
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Required Skills</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {displaySkills.map((s) => (
+                        <span key={s} className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-medium">{s}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
-
-            {/* Submitted By — always shown */}
-            <SubmittedByCard job={job} onSaved={handleJobUpdate} />
-
-            {/* Hiring Manager — always shown, editable */}
-            <HiringManagerCard job={job} onSaved={handleJobUpdate} />
 
             {/* Bill Rate — contract jobs only */}
             {isContract && <BillRateCard job={job} onSaved={handleJobUpdate} />}
 
-            {/* End Client — contract jobs */}
-            {isContract && (
-              <EditableContactCard
-                title="End Client"
-                fields={{ name: job.end_client_name, contact: job.end_client_contact, email: job.end_client_email, phone: job.end_client_phone }}
-                patchKeys={{ name: "end_client_name", contact: "end_client_contact", email: "end_client_email", phone: "end_client_phone" }}
-                jobId={id}
-                onSaved={handleJobUpdate}
-              />
-            )}
-
-            {/* Vendor / MSP — contract jobs */}
-            {isContract && (
-              <EditableContactCard
-                title="Vendor / MSP"
-                fields={{ name: job.vendor_name, contact: job.vendor_contact, email: job.vendor_email, phone: job.vendor_phone }}
-                patchKeys={{ name: "vendor_name", contact: "vendor_contact", email: "vendor_email", phone: "vendor_phone" }}
-                jobId={id}
-                onSaved={handleJobUpdate}
-              />
-            )}
+            {/* Client & Vendor — combined tile */}
+            <ClientVendorCard job={job} jobId={id} isContract={isContract} onSaved={handleJobUpdate} />
 
             {/* Assignment info */}
             <div className="rounded-xl border border-border bg-card p-4 space-y-3">
@@ -1276,74 +1529,182 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           {/* ── Right column ── */}
           <div className="lg:col-span-2 space-y-4">
 
-            {/* Start Validation banner — shown when job is NEW */}
+            {/* Pipeline progress */}
+            <PipelineBar jobId={id} currentStage={job.pipeline_stage ?? "validate"} />
+
+            {/* Start Validation form — shown when job is NEW */}
             {jobStatus === "NEW" && (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 p-5 space-y-3">
+              <div className="rounded-xl border border-sky-200 bg-sky-50 p-5 space-y-4">
                 <div className="flex items-center gap-2">
                   <ClipboardCheckIcon className="size-4 text-sky-600" />
                   <p className="text-sm font-semibold text-sky-700">New Job Received</p>
                 </div>
                 <p className="text-xs text-sky-600">
-                  Review the job details and start validation to confirm this job is ready for recruitment.
+                  Review the job details on the left, confirm the checklist below, then submit to start validation.
                 </p>
-                <Button
-                  size="sm"
-                  className="h-8 w-full gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
-                  onClick={handleStartValidation}
-                  disabled={validating}
-                >
-                  <ClipboardCheckIcon className="size-3.5" />
-                  {validating ? "Starting…" : "Start Validation"}
-                </Button>
-              </div>
-            )}
 
-            {/* Initiate Case panel — shown when no case yet */}
-            {(job.status === "pending_approval" || job.approval_status === "PENDING" || (!job.case_id && job.status !== "active")) && (
-              <InitiateCasePanel job={job} onSuccess={handleCaseInitiated} />
-            )}
+                {/* Checklist */}
+                <div className="rounded-lg border border-sky-200 bg-white/60 px-4 py-3 space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <Checkbox
+                      id="validated-hm"
+                      checked={validatedWithHM}
+                      onCheckedChange={(v) => setValidatedWithHM(!!v)}
+                      className="border-sky-400 data-[state=checked]:bg-sky-600 data-[state=checked]:border-sky-600"
+                    />
+                    <span className="text-sm text-sky-800">Validated with Hiring Manager</span>
+                  </label>
 
-            {/* Description (collapsible if long) */}
-            {job.description && (
-              <div className="rounded-xl border border-border bg-card p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Job Description</p>
-                <div className={isLongDesc && !descExpanded ? "line-clamp-6" : ""}>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{job.description}</p>
+                  {/* Contact Vendor — collapsible */}
+                  <div className="border-t border-sky-100 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!contactVendorOpen && job) {
+                          const to   = job.vendor_contact || "Team";
+                          const title = job.title || "the position";
+                          const client = job.end_client_name || job.company || "";
+                          setVendorEmailSubject(`Following up: ${title}${client ? ` – ${client}` : ""}`);
+                          setVendorEmailBody(
+`Hi ${to},
+
+I hope you're doing well. I'm reaching out regarding the ${title} position${client ? ` at ${client}` : ""}.
+
+I'd love to connect and discuss the requirements in detail. Could you please share your availability for a quick call?
+
+Looking forward to hearing from you.
+
+Best regards,
+${user?.name ?? "Hiring Team"}`
+                          );
+                          setVendorWhatsAppMsg(
+`Hi ${to}, I'm reaching out regarding the *${title}* position${client ? ` at ${client}` : ""}. Could we connect to discuss the requirements? Please let me know your availability.`
+                          );
+                        }
+                        setContactVendorOpen((v) => !v);
+                      }}
+                      className="flex w-full items-center justify-between text-xs font-medium text-sky-700 hover:text-sky-900"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <MailIcon className="size-3.5" />
+                        Contact Vendor
+                        {(job?.vendor_email || job?.vendor_phone) && (
+                          <span className="text-[10px] font-normal text-sky-500">
+                            · {job.vendor_contact || job.vendor_name || job.vendor_email}
+                          </span>
+                        )}
+                      </span>
+                      {contactVendorOpen
+                        ? <ChevronUpIcon className="size-3.5 text-sky-400" />
+                        : <ChevronDownIcon className="size-3.5 text-sky-400" />}
+                    </button>
+
+                    {contactVendorOpen && (
+                      <div className="mt-3 space-y-3">
+                        {/* Vendor info chips */}
+                        {(job?.vendor_email || job?.vendor_phone) && (
+                          <div className="flex flex-wrap gap-2">
+                            {job?.vendor_email && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] text-sky-700">
+                                <MailIcon className="size-2.5" />{job.vendor_email}
+                              </span>
+                            )}
+                            {job?.vendor_phone && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] text-sky-700">
+                                <PhoneIcon className="size-2.5" />{job.vendor_phone}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Email composer */}
+                        {job?.vendor_email && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-sky-600">Email</p>
+                            <div className="space-y-1.5">
+                              <Label className="text-[10px] text-muted-foreground">Subject</Label>
+                              <Input
+                                value={vendorEmailSubject}
+                                onChange={(e) => setVendorEmailSubject(e.target.value)}
+                                className="h-7 text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[10px] text-muted-foreground">Body</Label>
+                              <Textarea
+                                value={vendorEmailBody}
+                                onChange={(e) => setVendorEmailBody(e.target.value)}
+                                rows={6}
+                                className="text-xs resize-none"
+                              />
+                            </div>
+                            <a
+                              href={`mailto:${job.vendor_email}?subject=${encodeURIComponent(vendorEmailSubject)}&body=${encodeURIComponent(vendorEmailBody)}`}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-3 py-1.5"
+                            >
+                              <MailIcon className="size-3" /> Send Email
+                            </a>
+                          </div>
+                        )}
+
+                        {/* WhatsApp composer */}
+                        {job?.vendor_phone && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-sky-600">WhatsApp</p>
+                            <div className="space-y-1.5">
+                              <Label className="text-[10px] text-muted-foreground">Message</Label>
+                              <Textarea
+                                value={vendorWhatsAppMsg}
+                                onChange={(e) => setVendorWhatsAppMsg(e.target.value)}
+                                rows={3}
+                                className="text-xs resize-none"
+                              />
+                            </div>
+                            <a
+                              href={`https://wa.me/${job.vendor_phone.replace(/\D/g, "")}?text=${encodeURIComponent(vendorWhatsAppMsg)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5"
+                            >
+                              <MessageCircleIcon className="size-3" /> Open WhatsApp
+                            </a>
+                          </div>
+                        )}
+
+                        {!job?.vendor_email && !job?.vendor_phone && (
+                          <p className="text-xs text-muted-foreground italic">No vendor contact info saved. Add it in the Client &amp; Vendor tile.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {isLongDesc && (
-                  <button
-                    type="button"
-                    onClick={() => setDescExpanded((v) => !v)}
-                    className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-9 text-sm border-sky-300 text-sky-700 hover:bg-sky-100"
+                    onClick={() => router.push("/manager/jobs")}
                   >
-                    {descExpanded ? <><ChevronUpIcon className="size-3" /> Show less</> : <><ChevronDownIcon className="size-3" /> Show more</>}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Required skills */}
-            {displaySkills.length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Required Skills</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {displaySkills.map((s) => (
-                    <span key={s} className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-medium">{s}</span>
-                  ))}
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 h-9 text-sm bg-sky-600 hover:bg-sky-700 text-white gap-1.5"
+                    disabled={!validatedWithHM || validating}
+                    onClick={handleStartValidation}
+                  >
+                    <ClipboardCheckIcon className="size-3.5" />
+                    {validating ? "Submitting…" : "Submit"}
+                  </Button>
                 </div>
               </div>
             )}
 
-            {/* Nice to have */}
-            {job.nice_to_have?.length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Nice to Have</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {job.nice_to_have.map((s) => (
-                    <span key={s} className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">{s}</span>
-                  ))}
-                </div>
-              </div>
+            {/* Validate Job panel — shown only while job is in PENDING_VALIDATION and no case exists yet */}
+            {jobStatus === "PENDING_VALIDATION" && !job.case_id && (
+              <InitiateCasePanel job={job} onSuccess={handleCaseInitiated} />
             )}
 
             {/* Timestamps */}

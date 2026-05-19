@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Shell } from "@/components/layout/shell";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,13 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useTalents } from "@/hooks/use-talents";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -30,15 +23,14 @@ import {
   MapPinIcon,
   GlobeIcon,
   BotIcon,
-  InboxIcon,
-  UsersIcon,
   FileTextIcon,
   DownloadIcon,
   EyeIcon,
   LoaderIcon,
   UserCircleIcon,
+  UsersIcon,
 } from "lucide-react";
-import { VISA_STATUS_LABELS, TALENT_SOURCE_LABELS, CONTRACT_TYPES, WORK_MODE_LABELS, formatSalary } from "@/lib/constants";
+import { VISA_STATUS_LABELS, TALENT_SOURCE_LABELS, WORK_MODE_LABELS, CONTRACT_TYPES, formatSalary } from "@/lib/constants";
 import { JobTypeBadge } from "@/components/jobs/JobTypeBadge";
 import type { Talent } from "@/lib/database.types";
 
@@ -661,11 +653,7 @@ function JobApprovalCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ApprovalsPage() {
-  const [activeTab, setActiveTab] = useState<"talents" | "jobs">("talents");
   const [removedTalentIds, setRemovedTalentIds] = useState<Set<string>>(new Set());
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [recruiters, setRecruiters] = useState<Recruiter[]>([]);
-  const [jobsLoading, setJobsLoading] = useState(true);
 
   const { items: talents, total: talentTotal, loading: talentsLoading, error: talentsError } = useTalents({
     approval_status: "PENDING",
@@ -677,108 +665,32 @@ export default function ApprovalsPage() {
   }
 
   const visibleTalents = talents.filter((t) => !removedTalentIds.has(t.id));
-  const visibleCount = Math.max(0, talentTotal - removedTalentIds.size);
-
-  const loadJobs = useCallback(async () => {
-    setJobsLoading(true);
-    try {
-      const [jobData, recruiterData] = await Promise.all([
-        apiFetch<Job[]>("/api/approvals/pending-jobs"),
-        apiFetch<Recruiter[]>("/api/approvals/recruiters"),
-      ]);
-      setJobs(jobData);
-      setRecruiters(recruiterData);
-    } catch {
-      setJobs([]);
-    } finally {
-      setJobsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadJobs(); }, [loadJobs]);
-
-  const tabs = [
-    { id: "talents" as const, label: "Talent Requests",   count: visibleCount },
-    { id: "jobs"    as const, label: "Job Post Requests",  count: jobs.length },
-  ];
 
   return (
     <>
-      <Shell role="manager" pageTitle="Approvals" pageSubtitle="Review pending requests">
-        {/* Tabs */}
-        <div className="flex items-center gap-1 border-b border-border mb-5">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={[
-                "flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px",
-                activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span className={[
-                  "flex size-4 items-center justify-center rounded-full text-[10px] font-semibold",
-                  activeTab === tab.id ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
-                ].join(" ")}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
+      <Shell role="manager" pageTitle="Approvals" pageSubtitle="Review pending talent requests">
+        <div className="space-y-3">
+          {talentsLoading ? (
+            [1, 2, 3].map((i) => <Skeleton key={i} className="h-36 w-full rounded-xl" />)
+          ) : talentsError ? (
+            <p className="text-sm text-destructive">{talentsError}</p>
+          ) : visibleTalents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+              <UserIcon className="size-8 text-muted-foreground/30" />
+              <p className="mt-3 text-sm font-medium text-muted-foreground">No pending talent requests</p>
+              <p className="mt-1 text-xs text-muted-foreground/60">Self-applied and agent-sourced talents will appear here</p>
+            </div>
+          ) : (
+            visibleTalents.map((t) => (
+              <TalentApprovalCard
+                key={t.id}
+                talent={t}
+                onApproved={() => dismissTalent(t.id)}
+                onRejected={() => dismissTalent(t.id)}
+              />
+            ))
+          )}
         </div>
-
-        {/* Talent Requests */}
-        {activeTab === "talents" && (
-          <div className="space-y-3">
-            {talentsLoading ? (
-              [1, 2, 3].map((i) => <Skeleton key={i} className="h-36 w-full rounded-xl" />)
-            ) : talentsError ? (
-              <p className="text-sm text-destructive">{talentsError}</p>
-            ) : visibleTalents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
-                <UserIcon className="size-8 text-muted-foreground/30" />
-                <p className="mt-3 text-sm font-medium text-muted-foreground">No pending talent requests</p>
-                <p className="mt-1 text-xs text-muted-foreground/60">Self-applied and agent-sourced talents will appear here</p>
-              </div>
-            ) : (
-              visibleTalents.map((t) => (
-                <TalentApprovalCard
-                  key={t.id}
-                  talent={t}
-                  onApproved={() => dismissTalent(t.id)}
-                  onRejected={() => dismissTalent(t.id)}
-                />
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Job Post Requests */}
-        {activeTab === "jobs" && (
-          <div className="space-y-3">
-            {jobsLoading ? (
-              [1, 2, 3].map((i) => <Skeleton key={i} className="h-36 w-full rounded-xl" />)
-            ) : jobs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
-                <InboxIcon className="size-8 text-muted-foreground/30" />
-                <p className="mt-3 text-sm font-medium text-muted-foreground">No pending job requests</p>
-                <p className="mt-1 text-xs text-muted-foreground/60">New jobs from email and other sources will appear here</p>
-              </div>
-            ) : (
-              jobs.map((j) => (
-                <JobApprovalCard
-                  key={j.id}
-                  job={j}
-                  onRejected={loadJobs}
-                />
-              ))
-            )}
-          </div>
-        )}
       </Shell>
       <Toaster position="top-right" richColors />
     </>

@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SendIcon, ActivityIcon } from "lucide-react";
+import { SendIcon, ActivityIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { JobNote, MentionUser } from "@/lib/database.types";
 
@@ -64,6 +64,8 @@ export function PulsePanel({ jobId }: PulsePanelProps) {
   const [posting, setPosting] = useState(false);
   const [mentionedIds, setMentionedIds] = useState<Set<string>>(new Set());
   const [mention, setMention] = useState<{ query: string; start: number; cursorPos: number } | null>(null);
+
+  const [expanded, setExpanded] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -162,15 +164,23 @@ export function PulsePanel({ jobId }: PulsePanelProps) {
   }
 
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card overflow-hidden" style={{ minHeight: "360px", maxHeight: "520px" }}>
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3 shrink-0">
-        <ActivityIcon className="size-4 text-primary" />
-        <p className="text-sm font-semibold">Pulse</p>
-        <span className="ml-auto text-[10px] text-muted-foreground">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* Header — clickable to toggle */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-4 py-3 hover:bg-muted/30 transition-colors"
+      >
+        <ActivityIcon className="size-4 text-primary shrink-0" />
+        <p className="text-sm font-semibold flex-1 text-left">Pulse</p>
+        <span className="text-[10px] text-muted-foreground mr-2">
           {notes.length} note{notes.length !== 1 ? "s" : ""}
         </span>
-      </div>
+        {expanded ? <ChevronUpIcon className="size-4 text-muted-foreground shrink-0" /> : <ChevronDownIcon className="size-4 text-muted-foreground shrink-0" />}
+      </button>
+
+      {expanded && (
+      <div className="flex flex-col border-t border-border" style={{ minHeight: "320px", maxHeight: "500px" }}>
 
       {/* Feed */}
       <div ref={feedRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4 min-h-0">
@@ -261,6 +271,8 @@ export function PulsePanel({ jobId }: PulsePanelProps) {
           Enter to post · Shift+Enter for new line · @ to mention
         </p>
       </div>
+      </div>
+      )}
     </div>
   );
 }

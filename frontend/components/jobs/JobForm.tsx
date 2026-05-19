@@ -89,7 +89,7 @@ const EMPTY: JobFormData = {
   currency: "USD", salary: "", pay_rate: "", bill_rate: "",
   experience_min: "", openings: "1",
   required_skills: [], nice_to_have: [],
-  visa_requirements: [],
+  visa_requirements: ["USC", "GC", "GC_EAD"],
   submitter_name: "", submitter_email: "", submitter_phone: "",
   recruiter_id: "",
 };
@@ -194,7 +194,13 @@ export function JobForm({
   submitting?: boolean;
   recruiters?: Recruiter[];
 }) {
-  const [data, setData] = useState<JobFormData>({ ...EMPTY, ...initialData });
+  const [data, setData] = useState<JobFormData>(() => {
+    const merged = { ...EMPTY, ...initialData };
+    if (!merged.visa_requirements || merged.visa_requirements.length === 0) {
+      merged.visa_requirements = ["USC", "GC", "GC_EAD"];
+    }
+    return merged;
+  });
   const [errors, setErrors] = useState<Partial<Record<keyof JobFormData, string>>>({});
 
   const [contactOpen, setContactOpen] = useState(false);
@@ -231,6 +237,17 @@ export function JobForm({
           if (Array.isArray(v)) { if (v.length > 0) (merged as Record<string, unknown>)[k] = v; }
           else if (v !== null && v !== undefined && v !== "") (merged as Record<string, unknown>)[k] = v;
         }
+        // Always keep the three defaults, then add only explicitly mentioned visas
+        const rawText = (aiTab === "paste" ? aiText : "").toLowerCase();
+        const autoVisas = new Set<string>(["USC", "GC", "GC_EAD"]);
+        if (/\bh1b\b|\bh-1b\b/.test(rawText)) autoVisas.add("H1B");
+        if (/\bead\b/.test(rawText)) { autoVisas.add("EAD"); autoVisas.add("H4_EAD"); autoVisas.add("L2_EAD"); }
+        if (/\bopt\b|\bf1[\s-]?opt\b/.test(rawText)) autoVisas.add("F1_OPT");
+        if (/\bstem[\s-]?opt\b/.test(rawText)) { autoVisas.add("STEM_OPT"); autoVisas.add("F1_OPT"); }
+        if (/\bcpt\b/.test(rawText)) autoVisas.add("F1_CPT");
+        if (/\bl1\b|\bl-1\b/.test(rawText)) autoVisas.add("L1");
+        if (/\btn\b/.test(rawText)) autoVisas.add("TN");
+        merged.visa_requirements = Array.from(autoVisas);
         return merged;
       });
       setAiFilled(true);
@@ -451,7 +468,7 @@ export function JobForm({
 
           <div className="sm:col-span-2">
             <Field label="Job Description" required>
-              <Textarea value={data.description} onChange={(e) => set("description", e.target.value)} rows={5} placeholder="Describe the role, responsibilities, and requirements…" className="text-sm resize-none" />
+              <Textarea value={data.description} onChange={(e) => set("description", e.target.value)} rows={10} placeholder="AI-generated summary appears here after parsing, or type manually…" className="text-sm resize-none" />
               {errors.description && <p className="text-xs text-destructive mt-1">{errors.description}</p>}
             </Field>
           </div>
@@ -518,9 +535,6 @@ export function JobForm({
 
           {contract ? (
             <>
-              <Field label="Pay Rate (per hour)">
-                <Input type="number" min={0} value={data.pay_rate} onChange={(e) => set("pay_rate", e.target.value)} className="h-8 text-sm" placeholder="e.g. 75" />
-              </Field>
               {mode === "internal" && (
                 <Field label="Bill Rate (per hour)">
                   <Input type="number" min={0} value={data.bill_rate} onChange={(e) => set("bill_rate", e.target.value)} className="h-8 text-sm" placeholder="e.g. 95" />
@@ -602,7 +616,9 @@ export function JobForm({
           <Field label="Recruiter">
             <Select value={data.recruiter_id} onValueChange={(v) => set("recruiter_id", v ?? "")}>
               <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder="Select a recruiter (optional)…" />
+                {data.recruiter_id
+                  ? <span>{recruiters.find((r) => r.id === data.recruiter_id)?.name ?? "Selected"}</span>
+                  : <SelectValue placeholder="Select a recruiter (optional)…" />}
               </SelectTrigger>
               <SelectContent>
                 {recruiters.map((r) => (

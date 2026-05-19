@@ -141,7 +141,7 @@ class SourceTalentsBody(BaseModel):
 
 
 class InitiateCaseRequest(BaseModel):
-    recruiter_id: str
+    recruiter_id: Optional[str] = None
     bill_rate_margin: float = 15.0
     internal_bill_rate: Optional[float] = None
 
@@ -159,6 +159,7 @@ def list_jobs(
     approval_status: Optional[str] = None,
     source: Optional[str] = None,
     channel: Optional[str] = None,
+    pending_only: Optional[bool] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
@@ -172,7 +173,9 @@ def list_jobs(
         )
     if status:
         query = query.eq("status", status)
-    if job_status:
+    if pending_only:
+        query = query.in_("job_status", ["NEW", "PENDING_VALIDATION"])
+    elif job_status:
         query = query.eq("job_status", job_status)
     if job_type:
         query = query.eq("job_type", job_type)
@@ -242,12 +245,11 @@ def create_job(body: JobCreate):
     data = body.model_dump(exclude_none=True)
     data.pop("recruiter_id", None)
 
-    # All jobs go through manager review regardless of source
-    data["status"] = "pending_approval"
-    data["approval_status"] = "PENDING"
+    # Jobs enter the case pipeline directly — no separate approval queue
+    data["status"] = "active"
+    data["approval_status"] = "APPROVED"
     data["job_status"] = "NEW"
-    data["is_active"] = False
-    # Remove any approval fields that were pre-filled
+    data["is_active"] = True
     data.pop("approved_by", None)
     data.pop("approved_at", None)
 
@@ -506,6 +508,29 @@ def get_job_assignments(job_id: str):
     return result.data
 
 
+# ── Job Talents (pipeline finalize/interview stages) ─────────────────────────
+
+class JobTalentStatusBody(BaseModel):
+    status: str
+
+@router.get("/{job_id}/job-talents")
+def list_job_talents(job_id: str, status: Optional[str] = None):
+    query = supabase.table("job_talents") \
+        .select("*, talents(id,name,first_name,last_name,current_title,current_company,total_experience,experience_years,visa_status,skills)") \
+        .eq("job_id", job_id)
+    if status:
+        query = query.eq("status", status)
+    result = query.order("created_at").execute()
+    return result.data
+
+@router.patch("/{job_id}/job-talents/{jt_id}")
+def update_job_talent(job_id: str, jt_id: str, body: JobTalentStatusBody):
+    result = supabase.table("job_talents").update({"status": body.status}).eq("id", jt_id).eq("job_id", job_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Job talent not found")
+    return result.data[0]
+
+
 # ── Initiate Case ─────────────────────────────────────────────────────────────
 
 @router.post("/{job_id}/initiate-case")
@@ -539,24 +564,211 @@ def initiate_case(job_id: str, body: InitiateCaseRequest):
         "approved_at": datetime.now(timezone.utc).isoformat(),
         "internal_bill_rate": internal_rate,
         "bill_rate_margin": body.bill_rate_margin,
+        "pipeline_stage": "search",
     }).eq("id", job_id).execute()
 
-    # Create assignment
-    supabase.table("job_assignments").insert({
-        "job_id": job_id,
-        "recruiter_id": body.recruiter_id,
-        "assigned_by": MANAGER_ID,
-        "status": "pending",
-    }).execute()
+    # Create assignment + notify only when a recruiter is specified
+    if body.recruiter_id:
+        supabase.table("job_assignments").insert({
+            "job_id": job_id,
+            "recruiter_id": body.recruiter_id,
+            "assigned_by": MANAGER_ID,
+            "status": "pending",
+        }).execute()
 
-    # Notify recruiter
-    supabase.table("notifications").insert({
-        "user_id": body.recruiter_id,
-        "type": "job_assigned",
-        "title": f"New case assigned: {case_id}",
-        "message": f"You have a new case: {job.data.get('title', '')}",
-        "data": {"job_id": job_id, "case_id": case_id},
-        "is_read": False,
-    }).execute()
+        supabase.table("notifications").insert({
+            "user_id": body.recruiter_id,
+            "type": "job_assigned",
+            "title": f"New case assigned: {case_id}",
+            "message": f"You have a new case: {job.data.get('title', '')}",
+            "data": {"job_id": job_id, "case_id": case_id},
+            "is_read": False,
+        }).execute()
 
     return {"case_id": case_id, "job_id": job_id}
+
+
+# ── Pipeline Stage ────────────────────────────────────────────────────────────
+
+STAGE_ORDER = ["validate", "search", "finalize", "internal_interview", "client_interview", "onboard", "closed"]
+
+class PipelineStageBody(BaseModel):
+    stage: str
+
+@router.patch("/{job_id}/pipeline-stage")
+def advance_pipeline(job_id: str, body: PipelineStageBody):
+    stage = body.stage
+    if stage not in STAGE_ORDER:
+        raise HTTPException(status_code=400, detail=f"Invalid stage: {stage}")
+
+    job = supabase.table("jobs").select("*").eq("id", job_id).single().execute()
+    if not job.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Guard checks
+    if stage == "search" and not job.data.get("case_id"):
+        raise HTTPException(status_code=400, detail="Case must be initiated before moving to search")
+
+    if stage == "finalize":
+        shortlisted = supabase.table("job_talents").select("id").eq("job_id", job_id).eq("status", "shortlisted").execute()
+        if not shortlisted.data:
+            raise HTTPException(status_code=400, detail="At least one candidate must be shortlisted")
+
+    if stage == "internal_interview":
+        selected = supabase.table("job_talents").select("id").eq("job_id", job_id).eq("status", "selected").execute()
+        if not selected.data:
+            raise HTTPException(status_code=400, detail="At least one candidate must be selected")
+
+    if stage == "client_interview":
+        pending = supabase.table("interviews").select("id").eq("job_id", job_id).eq("type", "internal").eq("outcome", "pending").execute()
+        if pending.data:
+            raise HTTPException(status_code=400, detail="All internal interviews must have an outcome recorded")
+
+    if stage == "onboard":
+        passed = supabase.table("interviews").select("id").eq("job_id", job_id).eq("type", "client").eq("outcome", "pass").execute()
+        if not passed.data:
+            raise HTTPException(status_code=400, detail="At least one candidate must pass the client interview")
+
+    update_data: dict = {"pipeline_stage": stage}
+    if stage == "closed":
+        accepted = supabase.table("offers").select("id").eq("job_id", job_id).eq("status", "accepted").execute()
+        if not accepted.data:
+            raise HTTPException(status_code=400, detail="At least one offer must be accepted before closing")
+        update_data["job_status"] = "CLOSED"
+        update_data["status"] = "closed"
+
+    supabase.table("jobs").update(update_data).eq("id", job_id).execute()
+    return {"job_id": job_id, "pipeline_stage": stage}
+
+
+# ── Interviews ────────────────────────────────────────────────────────────────
+
+class InterviewCreate(BaseModel):
+    talent_id: str
+    type: str  # internal | client
+    scheduled_at: Optional[str] = None
+    duration_minutes: int = 60
+    interviewer_names: list[str] = []
+
+class InterviewUpdate(BaseModel):
+    outcome: Optional[str] = None
+    feedback: Optional[str] = None
+    status: Optional[str] = None
+    scheduled_at: Optional[str] = None
+    interviewer_names: Optional[list[str]] = None
+
+
+@router.get("/{job_id}/interviews")
+def list_interviews(job_id: str, type: Optional[str] = None):
+    query = supabase.table("interviews").select("*").eq("job_id", job_id)
+    if type:
+        query = query.eq("type", type)
+    result = query.order("created_at").execute()
+    return result.data
+
+
+@router.post("/{job_id}/interviews", status_code=201)
+def create_interview(job_id: str, body: InterviewCreate):
+    data = {
+        "job_id": job_id,
+        "talent_id": body.talent_id,
+        "type": body.type,
+        "duration_minutes": body.duration_minutes,
+        "interviewer_names": body.interviewer_names,
+    }
+    if body.scheduled_at:
+        data["scheduled_at"] = body.scheduled_at
+    result = supabase.table("interviews").insert(data).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create interview")
+    return result.data[0]
+
+
+@router.patch("/{job_id}/interviews/{interview_id}")
+def update_interview(job_id: str, interview_id: str, body: InterviewUpdate):
+    data = body.model_dump(exclude_none=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    result = supabase.table("interviews").update(data).eq("id", interview_id).eq("job_id", job_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    # When outcome is recorded, update job_talent status accordingly
+    if body.outcome and body.outcome != "pending":
+        interview = result.data[0]
+        talent_id = interview["talent_id"]
+        interview_type = interview["type"]
+        if body.outcome == "pass":
+            new_status = "internal_passed" if interview_type == "internal" else "client_passed"
+        else:
+            new_status = "rejected"
+        supabase.table("job_talents").update({"status": new_status}).eq("job_id", job_id).eq("talent_id", talent_id).execute()
+
+    return result.data[0]
+
+
+# ── Offers ────────────────────────────────────────────────────────────────────
+
+class OfferCreate(BaseModel):
+    talent_id: str
+    offered_rate: Optional[float] = None
+    offered_salary: Optional[float] = None
+    currency: str = "USD"
+    start_date: Optional[str] = None
+    notes: Optional[str] = None
+
+class OfferUpdate(BaseModel):
+    status: Optional[str] = None
+    offered_rate: Optional[float] = None
+    offered_salary: Optional[float] = None
+    start_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.get("/{job_id}/offers")
+def list_offers(job_id: str):
+    result = supabase.table("offers").select("*").eq("job_id", job_id).order("created_at").execute()
+    return result.data
+
+
+@router.post("/{job_id}/offers", status_code=201)
+def create_offer(job_id: str, body: OfferCreate):
+    data = {
+        "job_id": job_id,
+        "talent_id": body.talent_id,
+        "currency": body.currency,
+    }
+    for field in ["offered_rate", "offered_salary", "start_date", "notes"]:
+        val = getattr(body, field)
+        if val is not None:
+            data[field] = val
+
+    result = supabase.table("offers").insert(data).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create offer")
+
+    supabase.table("job_talents").update({"status": "offer_extended"}).eq("job_id", job_id).eq("talent_id", body.talent_id).execute()
+    return result.data[0]
+
+
+@router.patch("/{job_id}/offers/{offer_id}")
+def update_offer(job_id: str, offer_id: str, body: OfferUpdate):
+    from datetime import datetime, timezone
+
+    data = body.model_dump(exclude_none=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    if body.status == "accepted":
+        data["accepted_at"] = datetime.now(timezone.utc).isoformat()
+
+    result = supabase.table("offers").update(data).eq("id", offer_id).eq("job_id", job_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Offer not found")
+
+    if body.status == "accepted":
+        talent_id = result.data[0]["talent_id"]
+        supabase.table("talents").update({"talent_status": "PLACED"}).eq("id", talent_id).execute()
+        supabase.table("job_talents").update({"status": "placed"}).eq("job_id", job_id).eq("talent_id", talent_id).execute()
+
+    return result.data[0]

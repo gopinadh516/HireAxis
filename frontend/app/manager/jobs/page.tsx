@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import {
   JOB_TYPE_LABELS, CONTRACT_TYPES, FULLTIME_TYPES, WORK_MODE_LABELS, formatSalary,
-  getUrgency, urgencyDaysLeft, URGENCY_LABEL, URGENCY_CLASS,
+  getUrgency, urgencyDaysLeft, URGENCY_LABEL, URGENCY_CLASS, formatJobId,
 } from "@/lib/constants";
 import { useAuth } from "@/contexts/auth-context";
 import type { Job } from "@/lib/database.types";
@@ -135,6 +135,9 @@ function JobRow({ job, onToggle, onDelete }: {
         {/* Meta */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground shrink-0">
+              {formatJobId(job)}
+            </span>
             {job.case_id && (
               <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold shrink-0">
                 {job.case_id}
@@ -455,6 +458,7 @@ export default function ManagerJobsPage() {
     search: search || undefined,
     job_type: typeFilter || undefined,
     ...basketFilters,
+    pending_only: activeBasket ? true : undefined,
     page,
   });
 
@@ -559,14 +563,14 @@ export default function ManagerJobsPage() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">
-              {activeBasketLabel ? `${activeBasketLabel} Work List` : "All Jobs"}
+              {activeBasketLabel ? `${activeBasketLabel} — Pending Action` : "All Jobs"}
             </h2>
             {activeBasket && (
               <button
                 onClick={() => { setActiveBasket(null); setPage(1); }}
                 className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
               >
-                <XIcon className="size-3" /> Clear filter
+                <XIcon className="size-3" /> Show all
               </button>
             )}
           </div>
@@ -617,10 +621,10 @@ export default function ManagerJobsPage() {
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
               <InboxIcon className="size-8 text-muted-foreground/30" />
               <p className="mt-3 text-sm font-medium text-muted-foreground">
-                {activeBasketLabel ? `No jobs in ${activeBasketLabel} basket` : "No jobs found"}
+                {activeBasketLabel ? `No pending jobs in ${activeBasketLabel}` : "No jobs found"}
               </p>
               <p className="mt-1 text-xs text-muted-foreground/60">
-                {activeBasketLabel ? "Jobs from this channel will appear here" : "Try adjusting your filters or post a new job"}
+                {activeBasketLabel ? "All jobs from this channel have been processed and assigned" : "Try adjusting your filters or post a new job"}
               </p>
             </div>
           ) : (

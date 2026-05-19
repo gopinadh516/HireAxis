@@ -83,7 +83,6 @@ def list_recruiters():
     result = (
         supabase.table("users")
         .select("id,name,email,role")
-        .in_("role", ["recruiter", "manager"])
         .eq("is_active", True)
         .execute()
     )

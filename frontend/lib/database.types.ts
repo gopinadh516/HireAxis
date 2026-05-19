@@ -79,12 +79,42 @@ export interface Job {
   vendor_email: string | null;
   vendor_phone: string | null;
   posted_by_id: string | null;
+  job_number: number | null;
+  pipeline_stage: "validate" | "search" | "finalize" | "internal_interview" | "client_interview" | "onboard" | "closed" | null;
   case_id: string | null;
   internal_bill_rate: number | null;
   bill_rate_margin: number | null;
   submitted_by_name: string | null;
   submitted_by_email: string | null;
   submitted_by_phone: string | null;
+}
+
+export interface Interview {
+  id: string;
+  job_id: string;
+  talent_id: string;
+  type: "internal" | "client";
+  scheduled_at: string | null;
+  duration_minutes: number;
+  interviewer_names: string[];
+  outcome: "pending" | "pass" | "fail" | "hold";
+  feedback: string | null;
+  status: "scheduled" | "completed" | "cancelled";
+  created_at: string;
+}
+
+export interface Offer {
+  id: string;
+  job_id: string;
+  talent_id: string;
+  offered_rate: number | null;
+  offered_salary: number | null;
+  currency: string;
+  start_date: string | null;
+  status: "extended" | "accepted" | "declined" | "withdrawn";
+  accepted_at: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface JobNote {
